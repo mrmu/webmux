@@ -135,6 +135,22 @@ async function main() {
 
   server.listen(currentPort, hostname, () => {
     console.log(`> webmux ready on http://${hostname}:${currentPort}`);
+
+    // Auto-restore sessions from DB after server is ready
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`http://localhost:${currentPort}/api/sessions/restore`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        const data = await res.json();
+        if (data.restored?.length) {
+          console.log(`> restored sessions: ${data.restored.join(", ")}`);
+        }
+      } catch (err) {
+        console.error("> session restore failed:", err.message);
+      }
+    }, 2000);
   });
 }
 

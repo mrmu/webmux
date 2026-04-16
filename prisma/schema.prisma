@@ -13,6 +13,8 @@ model Project {
   displayName String   @map("display_name")
   description String   @default("")
   color       String   @default("#6366f1")
+  cwd         String   @default("")
+  command     String   @default("")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   notes       Note[]

@@ -14,6 +14,9 @@ export interface SessionInfo {
   width: number;
   height: number;
   activity: string;
+  running: boolean;
+  cwd: string;
+  command: string;
 }
 
 export default function SessionList({
@@ -64,19 +67,45 @@ export default function SessionList({
             <div
               key={s.name}
               className="session-card"
-              onClick={() => onOpenWorkspace(s.name, sessions)}
+              onClick={() => {
+                if (s.running) {
+                  onOpenWorkspace(s.name, sessions);
+                } else {
+                  // Restart stopped session
+                  (async () => {
+                    try {
+                      await api.post("/api/sessions", {
+                        name: s.name,
+                        display_name: s.display_name,
+                        cwd: s.cwd,
+                        command: s.command,
+                        color: s.color,
+                      });
+                      loadSessions();
+                    } catch {
+                      /* ignore */
+                    }
+                  })();
+                }
+              }}
             >
-              <div className="session-dot" style={{ background: s.color }}>
+              <div
+                className="session-dot"
+                style={{
+                  background: s.color,
+                  opacity: s.running ? 1 : 0.4,
+                }}
+              >
                 {s.display_name.charAt(0).toUpperCase()}
               </div>
               <div className="session-card-info">
                 <div className="session-card-name">{s.display_name}</div>
                 <div className="session-card-meta">
-                  {s.name} &middot; {s.activity}
+                  {s.name} &middot; {s.running ? "running" : "stopped"}
                 </div>
               </div>
               <div
-                className={`session-card-status${s.attached ? " active" : ""}`}
+                className={`session-card-status${s.running ? " active" : ""}`}
               />
             </div>
           ))
