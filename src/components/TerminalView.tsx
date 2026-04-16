@@ -16,8 +16,6 @@ export default function TerminalView({
     async function initTerminal() {
       const { Terminal } = await import("@xterm/xterm");
       const { FitAddon } = await import("@xterm/addon-fit");
-      await import("@xterm/xterm/css/xterm.css");
-
       if (cancelled || !containerRef.current) return;
 
       const terminal = new Terminal({
