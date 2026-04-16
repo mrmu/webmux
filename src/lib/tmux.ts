@@ -18,7 +18,13 @@ async function runTmux(...args: string[]): Promise<string> {
     return stdout;
   } catch (err: unknown) {
     const error = err as { stderr?: string };
-    if (error.stderr && error.stderr.includes("no server running")) {
+    const stderr = error.stderr || "";
+    if (
+      stderr.includes("no server running") ||
+      stderr.includes("No such file or directory") ||
+      stderr.includes("session not found") ||
+      stderr.includes("can't find session")
+    ) {
       return "";
     }
     throw err;
