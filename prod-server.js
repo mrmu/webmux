@@ -169,8 +169,7 @@ async function main() {
     server,
   });
 
-  // handlers[0] is the request handler, handlers[1] is the upgrade handler
-  requestHandler = handlers[0];
+  requestHandler = handlers.requestHandler;
 
   // Start listening
   server.listen(currentPort, hostname, () => {
