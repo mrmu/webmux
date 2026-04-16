@@ -1,0 +1,8 @@
+# Local development overrides — auto-loaded by `docker compose up`
+services:
+  app:
+    environment:
+      VIRTUAL_HOST: webmux.test
+      VIRTUAL_PORT: "3000"
+    volumes:
+      - /tmp/tmux-${TMUX_UID:-501}:/tmp/tmux-${TMUX_UID:-501}:rw

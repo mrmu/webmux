@@ -28,15 +28,10 @@ services:
     container_name: webmux
     restart: unless-stopped
     environment:
-      VIRTUAL_HOST: webmux.test
-      VIRTUAL_PORT: "3000"
       DATABASE_URL: postgresql://webmux:${POSTGRES_PASSWORD:-webmux}@db:5432/webmux?schema=public
       WEBMUX_PASSWORD: ${WEBMUX_PASSWORD:-}
       WEBMUX_SECRET: ${WEBMUX_SECRET:-}
-      HOST_HOME: /home/devops_bot
-    volumes:
-      - /tmp/tmux-1002:/tmp/tmux-1002:rw
-      - /home/devops_bot:/home/devops_bot:rw
+      HOST_HOME: ${HOST_HOME:-/home/devops_bot}
     depends_on:
       db:
         condition: service_healthy

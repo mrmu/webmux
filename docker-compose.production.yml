@@ -1,0 +1,12 @@
+# Production overrides
+# Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+services:
+  app:
+    environment:
+      VIRTUAL_HOST: webmux.pangogo.com
+      VIRTUAL_PORT: "3000"
+      LETSENCRYPT_HOST: webmux.pangogo.com
+      LETSENCRYPT_EMAIL: audilu@panmedia.asia
+    volumes:
+      - /tmp/tmux-1002:/tmp/tmux-1002:rw
+      - /home/devops_bot:/home/devops_bot:rw
