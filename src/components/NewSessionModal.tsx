@@ -48,7 +48,7 @@ export default function NewSessionModal({
               type="text"
               placeholder="my-project"
               required
-              pattern="[a-zA-Z0-9_-]+"
+              pattern="[a-zA-Z0-9_\-]+"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
