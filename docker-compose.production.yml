@@ -1,20 +1,26 @@
-# Production overrides (Linux/GCP)
+# Production overrides (Linux)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
-# Key: container runs as the SAME UID as host user (devops_bot = 1002:1003)
-# This lets tmux in the container connect to the host's tmux server via socket.
-# Claude Code runs on the HOST inside tmux sessions — not in the container.
+# Container runs as the SAME UID as the host dev user, so tmux in the
+# container connects to the host's tmux server via mounted socket.
+# Claude Code runs on the HOST — never installed in the container.
+#
+# Required .env vars:
+#   HOST_UID=1002       (id -u of the host dev user)
+#   HOST_GID=1003       (id -g of the host dev user)
+#   HOST_USER_HOME=/home/devops_bot
 services:
   app:
-    user: "1002:1003"
+    user: "${HOST_UID}:${HOST_GID}"
     environment:
-      VIRTUAL_HOST: webmux.pangogo.com
+      VIRTUAL_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
       VIRTUAL_PORT: "3000"
-      LETSENCRYPT_HOST: webmux.pangogo.com
-      LETSENCRYPT_EMAIL: audilu@panmedia.asia
-      PROJECTS_ROOT: /home/devops_bot
+      LETSENCRYPT_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
+      PROJECTS_ROOT: ${HOST_USER_HOME:-/home/devops_bot}
+      HOME: ${HOST_USER_HOME:-/home/devops_bot}
     volumes:
-      # Host tmux socket — container tmux connects to host tmux server
-      - /tmp/tmux-1002:/tmp/tmux-1002:rw
-      # Host home directory — all projects, claude config, ssh keys
-      - /home/devops_bot:/home/devops_bot:rw
+      # Host tmux socket
+      - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
+      # Host home directory
+      - ${HOST_USER_HOME:-/home/devops_bot}:${HOST_USER_HOME:-/home/devops_bot}:rw
