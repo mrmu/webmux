@@ -1,33 +1,30 @@
 /**
  * Production server for standalone Next.js + WebSocket.
- * This file is copied into the standalone output and runs as the entry point.
+ * Uses the same startServer approach as the default standalone server.js
+ * but injects WebSocket handling via the httpServer instance.
  */
 
-const { createServer } = require("http");
-const { parse } = require("url");
 const path = require("path");
+const { parse } = require("url");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
 const { promisify } = require("util");
 
 const execFileAsync = promisify(execFile);
 
-// Next.js standalone handler
+const dir = path.join(__dirname);
 process.env.NODE_ENV = "production";
-const NextServer =
-  require("next/dist/server/next-server").default;
+process.chdir(__dirname);
 
-const nextServer = new NextServer({
-  hostname: "0.0.0.0",
-  port: parseInt(process.env.PORT || "3000", 10),
-  dir: path.join(__dirname),
-  dev: false,
-  customServer: true,
-  conf: require(path.join(__dirname, ".next", "required-server-files.json"))
-    .config,
-});
+const currentPort = parseInt(process.env.PORT, 10) || 3000;
+const hostname = process.env.HOSTNAME || "0.0.0.0";
 
-const handle = nextServer.getRequestHandler();
+// Load config from required-server-files.json (same as default standalone)
+const nextConfig = require(
+  path.join(__dirname, ".next", "required-server-files.json")
+).config;
+
+process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 // ─── Tmux helpers ──────────────────────────────────────────────────
 
@@ -78,38 +75,7 @@ function getCookieValue(header, name) {
   return m ? m[1] : null;
 }
 
-// ─── Server ────────────────────────────────────────────────────────
-
-const port = parseInt(process.env.PORT || "3000", 10);
-
-const server = createServer(async (req, res) => {
-  const parsedUrl = parse(req.url, true);
-  await handle(req, res, parsedUrl);
-});
-
-// WebSocket
-const { WebSocketServer } = require("ws");
-const wss = new WebSocketServer({ noServer: true });
-
-server.on("upgrade", (request, socket, head) => {
-  const { pathname } = parse(request.url || "", true);
-
-  if (pathname && pathname.startsWith("/ws/terminal/")) {
-    const token = getCookieValue(request.headers.cookie, "webmux_token");
-    if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
-      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-      socket.destroy();
-      return;
-    }
-
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      const sessionName = pathname.replace("/ws/terminal/", "");
-      handleTerminal(ws, sessionName);
-    });
-  } else {
-    socket.destroy();
-  }
-});
+// ─── WebSocket terminal handler ────────────────────────────────────
 
 function handleTerminal(ws, sessionName) {
   let lastContent = "";
@@ -136,7 +102,8 @@ function handleTerminal(ws, sessionName) {
   ws.on("message", async (raw) => {
     try {
       const data = JSON.parse(raw.toString());
-      if (data.type === "input") await sendRawKeys(sessionName, data.data || "");
+      if (data.type === "input")
+        await sendRawKeys(sessionName, data.data || "");
       else if (data.type === "resize")
         await resizePane(sessionName, data.cols || 80, data.rows || 24);
       else if (data.type === "special")
@@ -154,8 +121,49 @@ function handleTerminal(ws, sessionName) {
   });
 }
 
-nextServer.prepare().then(() => {
-  server.listen(port, "0.0.0.0", () => {
-    console.log(`> webmux ready on http://0.0.0.0:${port}`);
+// ─── Start Next.js then attach WebSocket ───────────────────────────
+
+require("next");
+const { startServer } = require("next/dist/server/lib/start-server");
+
+startServer({
+  dir,
+  isDev: false,
+  config: nextConfig,
+  hostname,
+  port: currentPort,
+  allowRetry: false,
+})
+  .then((app) => {
+    // startServer returns the server instance — attach WebSocket upgrade handler
+    const httpServer = app;
+
+    const { WebSocketServer } = require("ws");
+    const wss = new WebSocketServer({ noServer: true });
+
+    httpServer.on("upgrade", (request, socket, head) => {
+      const { pathname } = parse(request.url || "", true);
+
+      if (pathname && pathname.startsWith("/ws/terminal/")) {
+        const token = getCookieValue(request.headers.cookie, "webmux_token");
+        if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
+          socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          const sessionName = pathname.replace("/ws/terminal/", "");
+          handleTerminal(ws, sessionName);
+        });
+      } else {
+        // Let Next.js handle other upgrades (HMR etc)
+      }
+    });
+
+    console.log(`> webmux ready on http://${hostname}:${currentPort}`);
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
   });
-});
