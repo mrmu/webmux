@@ -31,7 +31,7 @@ export async function listSessions(): Promise<TmuxSession[]> {
     out = await runTmux(
       "list-sessions",
       "-F",
-      "#{session_name}\t#{session_created}\t#{session_attached}\t#{window_width}\t#{window_height}\t#{session_activity}"
+      "#{session_name}|||#{session_created}|||#{session_attached}|||#{window_width}|||#{window_height}|||#{session_activity}"
     );
   } catch {
     return [];
@@ -43,7 +43,7 @@ export async function listSessions(): Promise<TmuxSession[]> {
     .filter((line) => line.trim())
     .map((line) => {
       const [name, created, attached, width, height, activity] =
-        line.split("\t");
+        line.split("|||");
       return {
         name,
         created,
