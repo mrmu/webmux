@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { getProjectCwd } from "@/lib/project-cwd";
 import * as tmux from "@/lib/tmux";
 
 export async function GET(
@@ -23,10 +24,8 @@ export async function POST(
 
   const { name } = await params;
   const body = await request.json();
-  const window = await tmux.createWindow(
-    name,
-    body.name || "shell",
-    body.cwd || undefined
-  );
+  // Default to the project's working directory
+  const cwd = body.cwd || (await getProjectCwd(name)) || undefined;
+  const window = await tmux.createWindow(name, body.name || "shell", cwd);
   return NextResponse.json(window);
 }
