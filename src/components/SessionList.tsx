@@ -46,7 +46,7 @@ export default function SessionList({
         <h1 className="top-title">Projects</h1>
         <button
           className="icon-btn"
-          title="New session"
+          title="New project"
           onClick={() => setShowModal(true)}
         >
           +
@@ -57,7 +57,7 @@ export default function SessionList({
           <div className="empty-state">
             <div className="empty-state-icon">&#x229E;</div>
             <p>
-              No project sessions yet.
+              No projects yet.
               <br />
               Create one to get started.
             </p>

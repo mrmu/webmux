@@ -58,8 +58,11 @@ export function setupWebSocket(server: HttpServer) {
       }
 
       wss.handleUpgrade(request, socket, head, (ws) => {
-        const sessionName = pathname.replace("/ws/terminal/", "");
-        handleTerminalConnection(ws, sessionName);
+        // URL: /ws/terminal/{session} or /ws/terminal/{session}/{windowIndex}
+        const parts = pathname.replace("/ws/terminal/", "").split("/");
+        const sessionName = parts[0];
+        const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
+        handleTerminalConnection(ws, sessionName, windowIndex);
       });
     } else {
       socket.destroy();
@@ -67,9 +70,13 @@ export function setupWebSocket(server: HttpServer) {
   });
 }
 
-function handleTerminalConnection(ws: WebSocket, sessionName: string) {
-  // Spawn tmux attach through a real PTY
-  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", sessionName], {
+function handleTerminalConnection(ws: WebSocket, sessionName: string, windowIndex?: number) {
+  // Target: session:window if specified, otherwise just session
+  const target =
+    windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
+
+  // Spawn tmux attach through a real PTY, targeting specific window
+  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", target], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,

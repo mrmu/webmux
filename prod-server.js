@@ -51,10 +51,12 @@ function getCookieValue(header, name) {
 
 // ─── PTY terminal handler ──────────────────────────────────────────
 
-function handleTerminal(ws, sessionName) {
+function handleTerminal(ws, sessionName, windowIndex) {
   const pty = require("node-pty");
+  const target =
+    windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
 
-  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", sessionName], {
+  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", target], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,
@@ -113,8 +115,10 @@ async function main() {
       }
 
       wss.handleUpgrade(request, socket, head, (ws) => {
-        const sessionName = pathname.replace("/ws/terminal/", "");
-        handleTerminal(ws, sessionName);
+        const parts = pathname.replace("/ws/terminal/", "").split("/");
+        const sessionName = parts[0];
+        const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
+        handleTerminal(ws, sessionName, windowIndex);
       });
     } else {
       socket.destroy();

@@ -1,16 +1,42 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { api } from "@/lib/api";
+
+interface TmuxWindow {
+  index: number;
+  name: string;
+  active: boolean;
+}
 
 export default function TerminalView({
   sessionName,
 }: {
   sessionName: string;
 }) {
+  const [windows, setWindows] = useState<TmuxWindow[]>([]);
+  const [activeWindow, setActiveWindow] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
 
+  // Load windows list
+  const loadWindows = useCallback(async () => {
+    try {
+      const data = await api.get(`/api/sessions/${sessionName}/windows`);
+      setWindows(data);
+    } catch {
+      setWindows([]);
+    }
+  }, [sessionName]);
+
   useEffect(() => {
+    loadWindows();
+  }, [loadWindows]);
+
+  // Connect PTY to active window
+  useEffect(() => {
+    if (windows.length === 0) return;
+
     let cancelled = false;
 
     async function initTerminal() {
@@ -18,6 +44,9 @@ export default function TerminalView({
       const { FitAddon } = await import("@xterm/addon-fit");
 
       if (cancelled || !containerRef.current) return;
+
+      // Clear previous terminal
+      containerRef.current.innerHTML = "";
 
       const terminal = new Terminal({
         theme: {
@@ -35,17 +64,15 @@ export default function TerminalView({
       const fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
       terminal.open(containerRef.current);
-
       setTimeout(() => fitAddon.fit(), 50);
 
-      // Connect WebSocket (PTY-backed)
+      // Connect WebSocket with window index
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(
-        `${proto}//${location.host}/ws/terminal/${sessionName}`
+        `${proto}//${location.host}/ws/terminal/${sessionName}/${activeWindow}`
       );
 
       ws.onopen = () => {
-        // Send initial size so PTY starts with correct dimensions
         ws.send(
           JSON.stringify({
             type: "resize",
@@ -59,7 +86,6 @@ export default function TerminalView({
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === "output") {
-            // PTY stream — write directly, no clear needed
             terminal.write(msg.data);
           }
         } catch {
@@ -68,17 +94,15 @@ export default function TerminalView({
       };
 
       ws.onclose = () => {
-        terminal.write("\r\n\x1b[90m[session disconnected]\x1b[0m\r\n");
+        terminal.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
       };
 
-      // Forward keyboard input to PTY
       terminal.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "input", data }));
         }
       });
 
-      // Handle resize
       const resizeObserver = new ResizeObserver(() => {
         fitAddon.fit();
         if (ws.readyState === WebSocket.OPEN) {
@@ -107,23 +131,73 @@ export default function TerminalView({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [sessionName]);
+  }, [sessionName, activeWindow, windows.length]);
 
-  const sendSpecial = (key: string) => {
-    // For PTY mode, special keys are sent as ANSI escape sequences
-    // through xterm.js onData handler, so these buttons aren't needed
-    // But we keep them for mobile convenience — send raw escape codes
-    // Not needed with PTY — xterm handles keyboard natively
+  const addWindow = async () => {
+    try {
+      const w = await api.post(`/api/sessions/${sessionName}/windows`, {
+        name: "shell",
+      });
+      await loadWindows();
+      setActiveWindow(w.index);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const closeWindow = async (index: number) => {
+    if (windows.length <= 1) return; // don't close last window
+    try {
+      await api.del(`/api/sessions/${sessionName}/windows/${index}`);
+      await loadWindows();
+      if (activeWindow === index) {
+        setActiveWindow(windows[0].index === index ? windows[1].index : windows[0].index);
+      }
+    } catch {
+      /* ignore */
+    }
   };
 
   return (
     <div className="view-panel terminal-view">
+      {/* Window tabs */}
+      {windows.length > 0 && (
+        <div className="terminal-window-tabs">
+          {windows.map((w) => (
+            <button
+              key={w.index}
+              className={`terminal-window-tab${activeWindow === w.index ? " active" : ""}`}
+              onClick={() => setActiveWindow(w.index)}
+            >
+              <span className="terminal-window-name">
+                {w.index === 0 ? "claude" : w.name}
+              </span>
+              {w.index !== 0 && (
+                <span
+                  className="tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeWindow(w.index);
+                  }}
+                >
+                  &times;
+                </span>
+              )}
+            </button>
+          ))}
+          <button className="terminal-window-tab add-tab" onClick={addWindow}>
+            +
+          </button>
+        </div>
+      )}
+
+      {/* Terminal */}
       <div className="terminal-wrap">
         <div className="terminal-container" ref={containerRef} />
       </div>
       <div className="terminal-bar">
         <span className="terminal-focus-hint">
-          Tap terminal to type &middot; PTY mode
+          Tap terminal to type
         </span>
       </div>
     </div>

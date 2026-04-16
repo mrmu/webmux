@@ -138,6 +138,62 @@ export async function resizePane(
   );
 }
 
+// ─── Window management ─────────────────────────────────────────────
+
+export interface TmuxWindow {
+  index: number;
+  name: string;
+  active: boolean;
+}
+
+export async function listWindows(sessionName: string): Promise<TmuxWindow[]> {
+  try {
+    const out = await runTmux(
+      "list-windows",
+      "-t",
+      sessionName,
+      "-F",
+      "#{window_index}|||#{window_name}|||#{window_active}"
+    );
+    return out
+      .trim()
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((line) => {
+        const [index, name, active] = line.split("|||");
+        return {
+          index: parseInt(index),
+          name,
+          active: active === "1",
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+export async function createWindow(
+  sessionName: string,
+  name?: string,
+  cwd?: string
+): Promise<TmuxWindow> {
+  const args = ["new-window", "-t", sessionName];
+  if (name) args.push("-n", name);
+  if (cwd) args.push("-c", cwd);
+  await runTmux(...args);
+
+  const windows = await listWindows(sessionName);
+  // New window is the last one
+  return windows[windows.length - 1];
+}
+
+export async function killWindow(
+  sessionName: string,
+  windowIndex: number
+): Promise<void> {
+  await runTmux("kill-window", "-t", `${sessionName}:${windowIndex}`);
+}
+
 /** Parse Claude Code terminal output into conversation messages (fallback). */
 export function parseClaudeConversation(
   rawText: string

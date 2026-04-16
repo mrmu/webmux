@@ -40,10 +40,10 @@ export default function NewSessionModal({
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <h2>New Project Session</h2>
+        <h2>New Project</h2>
         <form onSubmit={handleSubmit}>
           <label>
-            Session Name
+            Project Name
             <input
               type="text"
               placeholder="my-project"
