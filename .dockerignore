@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+refs
+data
+*.md
+!CLAUDE.md
+.env
+.env.*
+.DS_Store

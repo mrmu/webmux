@@ -1,7 +1,9 @@
 import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-const globalForPrisma = globalThis as unknown as { prisma: InstanceType<typeof PrismaClient> };
+const globalForPrisma = globalThis as unknown as {
+  prisma: InstanceType<typeof PrismaClient> | undefined;
+};
 
 function createClient() {
   const connectionString = process.env.DATABASE_URL;
@@ -12,6 +14,12 @@ function createClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma || createClient();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+/** Lazy-initialized Prisma client — only connects when first accessed at runtime. */
+export const prisma = new Proxy({} as InstanceType<typeof PrismaClient>, {
+  get(_target, prop) {
+    if (!globalForPrisma.prisma) {
+      globalForPrisma.prisma = createClient();
+    }
+    return (globalForPrisma.prisma as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});

@@ -5,6 +5,8 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+COPY prisma.config.ts ./
 RUN npm ci || npm install
 
 # --- Builder ---
@@ -29,13 +31,16 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+
+# Prisma 7 generated client + adapter
+COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
-# Custom production server with WebSocket support
+# Custom production server with WebSocket
 COPY --from=builder /app/prod-server.js ./server.js
-
-# ws library needed at runtime for WebSocket
+# ws library for WebSocket
 COPY --from=builder /app/node_modules/ws ./node_modules/ws
 
 USER nextjs

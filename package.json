@@ -10,7 +10,7 @@
     "db:migrate": "npx prisma migrate dev",
     "db:push": "npx prisma db push",
     "db:generate": "npx prisma generate",
-    "postinstall": "npx prisma generate"
+    "postinstall": "test -f prisma/schema.prisma && npx prisma generate || true"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
