@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // tmux session name
+  displayName String   @map("display_name")
+  description String   @default("")
+  color       String   @default("#6366f1")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  notes       Note[]
+
+  @@map("projects")
+}
+
+model Note {
+  id          Int      @id @default(autoincrement())
+  sessionName String   @map("session_name")
+  content     String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  project     Project  @relation(fields: [sessionName], references: [name], onDelete: Cascade)
+
+  @@map("notes")
+}

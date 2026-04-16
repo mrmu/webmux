@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: webmux
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-webmux}
+      POSTGRES_DB: webmux
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webmux"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build: .
+    command: sh -c "npx prisma db push --skip-generate"
+    environment:
+      DATABASE_URL: postgresql://webmux:${POSTGRES_PASSWORD:-webmux}@db:5432/webmux?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    container_name: webmux
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: webmux.test
+      VIRTUAL_PORT: "3000"
+      DATABASE_URL: postgresql://webmux:${POSTGRES_PASSWORD:-webmux}@db:5432/webmux?schema=public
+      WEBMUX_PASSWORD: ${WEBMUX_PASSWORD:-}
+      WEBMUX_SECRET: ${WEBMUX_SECRET:-}
+      HOST_HOME: /home/devops_bot
+    volumes:
+      - /tmp/tmux-1002:/tmp/tmux-1002:rw
+      - /home/devops_bot:/home/devops_bot:rw
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - default
+      - wp-proxy
+
+volumes:
+  pgdata:
+
+networks:
+  wp-proxy:
+    external: true
