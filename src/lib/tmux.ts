@@ -12,9 +12,14 @@ export interface TmuxSession {
   activity: string;
 }
 
+// If TMUX_SOCKET is set, use -S to connect to a specific socket file.
+// This is how the container connects to the host's tmux server.
+const TMUX_SOCKET = process.env.TMUX_SOCKET || "";
+
 async function runTmux(...args: string[]): Promise<string> {
+  const fullArgs = TMUX_SOCKET ? ["-S", TMUX_SOCKET, ...args] : args;
   try {
-    const { stdout } = await execFileAsync("tmux", args);
+    const { stdout } = await execFileAsync("tmux", fullArgs);
     return stdout;
   } catch (err: unknown) {
     const error = err as { stderr?: string };

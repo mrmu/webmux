@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { getSessionCwd, readFile, writeFile } from "@/lib/file-manager";
+import { getProjectCwd } from "@/lib/project-cwd";
+import { readFile, writeFile } from "@/lib/file-manager";
 
 export async function GET(
   request: NextRequest,
@@ -19,10 +20,10 @@ export async function GET(
     );
   }
 
-  const cwd = getSessionCwd(name);
+  const cwd = await getProjectCwd(name);
   if (!cwd) {
     return NextResponse.json(
-      { error: "CWD not found for session" },
+      { error: "Project working directory not set" },
       { status: 404 }
     );
   }
@@ -53,10 +54,10 @@ export async function PUT(
     return NextResponse.json({ error: "path is required" }, { status: 400 });
   }
 
-  const cwd = getSessionCwd(name);
+  const cwd = await getProjectCwd(name);
   if (!cwd) {
     return NextResponse.json(
-      { error: "CWD not found for session" },
+      { error: "Project working directory not set" },
       { status: 404 }
     );
   }

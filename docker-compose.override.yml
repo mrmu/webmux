@@ -1,12 +1,14 @@
 # Local development overrides — auto-loaded by `docker compose up`
+# macOS: tmux runs inside container (can't mount Unix sockets cross-platform)
+# Linux/GCP: set TMUX_SOCKET in production.yml for host tmux
 services:
   app:
     environment:
       VIRTUAL_HOST: webmux.test
       VIRTUAL_PORT: "3000"
-      HOST_HOME: /home/dev
+      PROJECTS_ROOT: /projects
     volumes:
-      # Mount host projects directory into container
-      - ${HOME:-/Users/audilu}/next:/home/dev/next:rw
-      # Share host home for Claude Code config files
-      - ${HOME:-/Users/audilu}/.claude:/home/dev/.claude:rw
+      # Mount host projects
+      - ${HOME:-/Users/audilu}/next:/projects:rw
+      # Mount Claude Code auth for persistence across rebuilds
+      - ${HOME:-/Users/audilu}/.claude:/home/nextjs/.claude:rw

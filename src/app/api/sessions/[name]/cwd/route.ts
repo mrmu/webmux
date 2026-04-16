@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { getSessionCwd } from "@/lib/file-manager";
+import { getProjectCwd } from "@/lib/project-cwd";
 
 export async function GET(
   request: NextRequest,
@@ -10,10 +10,10 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { name } = await params;
-  const cwd = getSessionCwd(name);
+  const cwd = await getProjectCwd(name);
   if (!cwd) {
     return NextResponse.json(
-      { error: "CWD not found for session" },
+      { error: "Project working directory not set" },
       { status: 404 }
     );
   }

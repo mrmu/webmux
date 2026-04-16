@@ -56,7 +56,10 @@ function handleTerminal(ws, sessionName, windowIndex) {
   const target =
     windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
 
-  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", target], {
+  const socketArgs = process.env.TMUX_SOCKET
+    ? ["-S", process.env.TMUX_SOCKET]
+    : [];
+  const ptyProcess = pty.spawn("tmux", [...socketArgs, "attach-session", "-t", target], {
     name: "xterm-256color",
     cols: 80,
     rows: 24,

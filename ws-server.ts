@@ -76,7 +76,13 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
     windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
 
   // Spawn tmux attach through a real PTY, targeting specific window
-  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", target], {
+  const socketArgs = process.env.TMUX_SOCKET
+    ? ["-S", process.env.TMUX_SOCKET]
+    : [];
+  const ptyProcess = pty.spawn(
+    "tmux",
+    [...socketArgs, "attach-session", "-t", target],
+    {
     name: "xterm-256color",
     cols: 80,
     rows: 24,

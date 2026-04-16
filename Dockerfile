@@ -23,10 +23,11 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# tmux + tools for Claude Code
 RUN apk add --no-cache openssl tmux git curl bash
 RUN npm install -g @anthropic-ai/claude-code
 RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 --shell /bin/bash nextjs
+RUN adduser --system --uid 1001 --shell /bin/bash -h /home/nextjs nextjs
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./

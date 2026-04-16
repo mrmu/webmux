@@ -1,5 +1,6 @@
-# Production overrides
+# Production overrides (Linux/GCP)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+# On Linux, tmux can run on host — mount the socket for persistence
 services:
   app:
     environment:
@@ -7,6 +8,10 @@ services:
       VIRTUAL_PORT: "3000"
       LETSENCRYPT_HOST: webmux.pangogo.com
       LETSENCRYPT_EMAIL: audilu@panmedia.asia
+      PROJECTS_ROOT: /home/devops_bot
+      # Uncomment to use host tmux (Linux only, not macOS Docker Desktop)
+      # TMUX_SOCKET: /tmp/host-tmux/default
     volumes:
-      - /tmp/tmux-1002:/tmp/tmux-1002:rw
       - /home/devops_bot:/home/devops_bot:rw
+      # Uncomment for host tmux socket (Linux only)
+      # - /tmp/tmux-1002:/tmp/host-tmux:rw

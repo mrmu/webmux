@@ -17,7 +17,7 @@ export default function NewSessionModal({
 }) {
   const [name, setName] = useState("");
   const [display, setDisplay] = useState("");
-  const [cwd, setCwd] = useState("/home/dev/next/");
+  const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState("claude --dangerously-skip-permissions");
   const [color, setColor] = useState(COLORS[0]);
 
@@ -53,10 +53,7 @@ export default function NewSessionModal({
               onChange={(e) => {
                 const v = e.target.value;
                 setName(v);
-                // Auto-fill cwd if user hasn't customized it
-                if (cwd === "/home/dev/next/" || cwd === `/home/dev/next/${name}`) {
-                  setCwd(v ? `/home/dev/next/${v}` : "/home/dev/next/");
-                }
+                // Don't auto-fill — server defaults to PROJECTS_ROOT/{name}
               }}
             />
           </label>
@@ -73,7 +70,7 @@ export default function NewSessionModal({
             Working Directory
             <input
               type="text"
-              placeholder="/home/dev/next/my-project"
+              placeholder="auto: {PROJECTS_ROOT}/{name}"
               value={cwd}
               onChange={(e) => setCwd(e.target.value)}
             />

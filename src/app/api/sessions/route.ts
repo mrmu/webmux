@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const name = (body.name || "").trim();
-  const cwd = body.cwd || `/home/dev/next/${name}`;
+  const projectsRoot = process.env.PROJECTS_ROOT || "/Users/audilu/next";
+  const cwd = body.cwd || `${projectsRoot}/${name}`;
   const command = body.command || "claude --dangerously-skip-permissions";
   const displayName = body.display_name || name;
   const color = body.color || "#6366f1";
