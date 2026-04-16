@@ -1,16 +1,15 @@
 # Local development overrides — auto-loaded by `docker compose up`
-# macOS: tmux runs inside container (can't mount Unix sockets cross-platform)
-# Linux/GCP: set TMUX_SOCKET in production.yml for host tmux
+# macOS: tmux + Claude Code run inside container
 services:
   app:
     environment:
       VIRTUAL_HOST: webmux.test
       VIRTUAL_PORT: "3000"
       PROJECTS_ROOT: /projects
-      # Claude Code Max Plan — first run: login once in container terminal,
-      # OAuth token saves to ~/.claude volume, persists across rebuilds
+      # Claude Code Max Plan — login once in container, token persists
+      # in the dedicated ~/.claude-webmux volume across rebuilds
     volumes:
       # Mount host projects
       - ${HOME:-/Users/audilu}/next:/projects:rw
-      # Mount Claude Code settings (history, plans, config — NOT auth)
-      - ${HOME:-/Users/audilu}/.claude:/home/nextjs/.claude:rw
+      # Dedicated Claude config for container (separate from host's)
+      - ${HOME:-/Users/audilu}/.claude-webmux:/home/nextjs/.claude:rw
