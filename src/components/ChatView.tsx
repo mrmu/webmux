@@ -44,6 +44,7 @@ export default function ChatView({
     type: string | null;
     status: string | null;
     idle: boolean;
+    process: string | null;
   } | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -107,12 +108,19 @@ export default function ChatView({
     }
   };
 
+  const [restarting, setRestarting] = useState(false);
+
   const restartClaude = async () => {
+    setRestarting(true);
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text: "claude" });
-      setTimeout(refreshChat, 2000);
+      // Give it time to start, then refresh UI state
+      setTimeout(() => {
+        refreshChat();
+        setRestarting(false);
+      }, 3000);
     } catch {
-      /* ignore */
+      setRestarting(false);
     }
   };
 
@@ -202,9 +210,15 @@ export default function ChatView({
       {/* Idle Banner */}
       {uiState?.idle && (
         <div className="idle-banner">
-          <span className="idle-text">Claude Code is not running</span>
-          <button className="idle-restart-btn" onClick={restartClaude}>
-            Restart
+          <span className="idle-text">
+            {uiState.process || "shell"} is idle
+          </span>
+          <button
+            className="idle-restart-btn"
+            onClick={restartClaude}
+            disabled={restarting}
+          >
+            {restarting ? "Starting..." : "Start Claude"}
           </button>
         </div>
       )}

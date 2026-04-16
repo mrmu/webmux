@@ -33,6 +33,7 @@ export default function Workspace({
     type: string | null;
     status: string | null;
     idle: boolean;
+    process: string | null;
   } | null>(null);
 
   const tabsRef = useRef<HTMLDivElement>(null);
