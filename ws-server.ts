@@ -1,45 +1,15 @@
 /**
- * WebSocket server for terminal streaming.
- * Shared between dev (server.ts) and production (prod-server.js).
+ * WebSocket server for terminal streaming via PTY.
+ *
+ * Instead of polling tmux capture-pane, we spawn `tmux attach-session`
+ * through a real PTY. This gives proper ANSI output for xterm.js.
  */
 
 import { Server as HttpServer, IncomingMessage } from "http";
 import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import * as pty from "node-pty";
 import crypto from "crypto";
-
-const execFileAsync = promisify(execFile);
-
-// ─── Tmux helpers ──────────────────────────────────────────────────
-
-async function runTmux(...args: string[]): Promise<string> {
-  try {
-    const { stdout } = await execFileAsync("tmux", args);
-    return stdout;
-  } catch (err: unknown) {
-    const error = err as { stderr?: string };
-    if (error.stderr?.includes("no server running")) return "";
-    throw err;
-  }
-}
-
-async function capturePane(session: string): Promise<string> {
-  return runTmux("capture-pane", "-t", session, "-p", "-S", "-32768");
-}
-
-async function sendRawKeys(session: string, keys: string): Promise<void> {
-  await runTmux("send-keys", "-t", session, "-l", keys);
-}
-
-async function sendSpecialKey(session: string, key: string): Promise<void> {
-  await runTmux("send-keys", "-t", session, key);
-}
-
-async function resizePane(session: string, w: number, h: number): Promise<void> {
-  await runTmux("resize-window", "-t", session, "-x", String(w), "-y", String(h));
-}
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
@@ -98,40 +68,47 @@ export function setupWebSocket(server: HttpServer) {
 }
 
 function handleTerminalConnection(ws: WebSocket, sessionName: string) {
-  let lastContent = "";
-  let streaming = true;
+  // Spawn tmux attach through a real PTY
+  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", sessionName], {
+    name: "xterm-256color",
+    cols: 80,
+    rows: 24,
+    cwd: process.cwd(),
+    env: process.env as Record<string, string>,
+  });
 
-  capturePane(sessionName)
-    .then((content) => {
-      lastContent = content;
-      ws.send(JSON.stringify({ type: "output", data: content }));
-    })
-    .catch(() => {});
-
-  const pollInterval = setInterval(async () => {
-    if (!streaming) return;
-    try {
-      const content = await capturePane(sessionName);
-      if (content !== lastContent) {
-        lastContent = content;
-        ws.send(JSON.stringify({ type: "output", data: content }));
-      }
-    } catch {
-      /* session may have been killed */
-    }
-  }, 100);
-
-  ws.on("message", async (raw) => {
-    try {
-      const data = JSON.parse(raw.toString());
-      if (data.type === "input") await sendRawKeys(sessionName, data.data || "");
-      else if (data.type === "resize") await resizePane(sessionName, data.cols || 80, data.rows || 24);
-      else if (data.type === "special") await sendSpecialKey(sessionName, data.key || "");
-    } catch {
-      /* ignore */
+  // PTY output → WebSocket → xterm.js
+  ptyProcess.onData((data: string) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "output", data }));
     }
   });
 
-  ws.on("close", () => { streaming = false; clearInterval(pollInterval); });
-  ws.on("error", () => { streaming = false; clearInterval(pollInterval); });
+  ptyProcess.onExit(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close();
+    }
+  });
+
+  // WebSocket → PTY
+  ws.on("message", (raw) => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === "input") {
+        ptyProcess.write(msg.data);
+      } else if (msg.type === "resize" && msg.cols && msg.rows) {
+        ptyProcess.resize(msg.cols, msg.rows);
+      }
+    } catch {
+      /* ignore malformed */
+    }
+  });
+
+  ws.on("close", () => {
+    ptyProcess.kill();
+  });
+
+  ws.on("error", () => {
+    ptyProcess.kill();
+  });
 }

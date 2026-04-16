@@ -2,7 +2,7 @@ FROM node:22-alpine AS base
 
 # --- Dependencies ---
 FROM base AS deps
-RUN apk add --no-cache libc6-compat openssl
+RUN apk add --no-cache libc6-compat openssl python3 make g++
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
@@ -38,10 +38,10 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
-# Custom production server with WebSocket
+# Custom production server with WebSocket + PTY
 COPY --from=builder /app/prod-server.js ./server.js
-# ws library for WebSocket
 COPY --from=builder /app/node_modules/ws ./node_modules/ws
+COPY --from=builder /app/node_modules/node-pty ./node_modules/node-pty
 
 USER nextjs
 EXPOSE 3000

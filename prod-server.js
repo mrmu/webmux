@@ -1,17 +1,11 @@
 /**
- * Production server for standalone Next.js + WebSocket.
- * Creates our own HTTP server, passes it to Next.js getRequestHandlers,
- * then attaches WebSocket upgrade handler for terminal streaming.
+ * Production server for standalone Next.js + WebSocket terminal (PTY).
  */
 
 const http = require("http");
 const path = require("path");
 const { parse } = require("url");
 const crypto = require("crypto");
-const { execFile } = require("child_process");
-const { promisify } = require("util");
-
-const execFileAsync = promisify(execFile);
 
 const dir = path.join(__dirname);
 process.env.NODE_ENV = "production";
@@ -20,30 +14,10 @@ process.chdir(__dirname);
 const currentPort = parseInt(process.env.PORT, 10) || 3000;
 const hostname = process.env.HOSTNAME || "0.0.0.0";
 
-// Load config (same as default standalone server.js)
 const nextConfig = require(
   path.join(__dirname, ".next", "required-server-files.json")
 ).config;
 process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
-
-// ─── Tmux helpers ──────────────────────────────────────────────────
-
-async function runTmux(...args) {
-  try {
-    const { stdout } = await execFileAsync("tmux", args);
-    return stdout;
-  } catch (err) {
-    if (err.stderr && err.stderr.includes("no server running")) return "";
-    throw err;
-  }
-}
-
-const capturePane = (s) =>
-  runTmux("capture-pane", "-t", s, "-p", "-S", "-32768");
-const sendRawKeys = (s, k) => runTmux("send-keys", "-t", s, "-l", k);
-const sendSpecialKey = (s, k) => runTmux("send-keys", "-t", s, k);
-const resizePane = (s, w, h) =>
-  runTmux("resize-window", "-t", s, "-x", String(w), "-y", String(h));
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
@@ -75,66 +49,55 @@ function getCookieValue(header, name) {
   return m ? m[1] : null;
 }
 
-// ─── WebSocket terminal handler ────────────────────────────────────
+// ─── PTY terminal handler ──────────────────────────────────────────
 
 function handleTerminal(ws, sessionName) {
-  let lastContent = "";
-  let streaming = true;
+  const pty = require("node-pty");
 
-  capturePane(sessionName)
-    .then((content) => {
-      lastContent = content;
-      ws.send(JSON.stringify({ type: "output", data: content }));
-    })
-    .catch(() => {});
+  const ptyProcess = pty.spawn("tmux", ["attach-session", "-t", sessionName], {
+    name: "xterm-256color",
+    cols: 80,
+    rows: 24,
+    cwd: process.cwd(),
+    env: process.env,
+  });
 
-  const poll = setInterval(async () => {
-    if (!streaming) return;
+  ptyProcess.onData((data) => {
+    if (ws.readyState === 1 /* OPEN */) {
+      ws.send(JSON.stringify({ type: "output", data }));
+    }
+  });
+
+  ptyProcess.onExit(() => {
+    if (ws.readyState === 1) ws.close();
+  });
+
+  ws.on("message", (raw) => {
     try {
-      const content = await capturePane(sessionName);
-      if (content !== lastContent) {
-        lastContent = content;
-        ws.send(JSON.stringify({ type: "output", data: content }));
-      }
-    } catch {}
-  }, 100);
-
-  ws.on("message", async (raw) => {
-    try {
-      const data = JSON.parse(raw.toString());
-      if (data.type === "input")
-        await sendRawKeys(sessionName, data.data || "");
-      else if (data.type === "resize")
-        await resizePane(sessionName, data.cols || 80, data.rows || 24);
-      else if (data.type === "special")
-        await sendSpecialKey(sessionName, data.key || "");
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === "input") ptyProcess.write(msg.data);
+      else if (msg.type === "resize" && msg.cols && msg.rows)
+        ptyProcess.resize(msg.cols, msg.rows);
     } catch {}
   });
 
-  ws.on("close", () => {
-    streaming = false;
-    clearInterval(poll);
-  });
-  ws.on("error", () => {
-    streaming = false;
-    clearInterval(poll);
-  });
+  ws.on("close", () => ptyProcess.kill());
+  ws.on("error", () => ptyProcess.kill());
 }
 
 // ─── Start ─────────────────────────────────────────────────────────
 
 async function main() {
-  // Placeholder request handler — replaced once Next.js is ready
   let requestHandler = (_req, res) => {
     res.statusCode = 503;
-    res.end("Server starting...");
+    res.end("Starting...");
   };
 
   const server = http.createServer((req, res) => {
     requestHandler(req, res);
   });
 
-  // Attach WebSocket before listen
+  // WebSocket
   const { WebSocketServer } = require("ws");
   const wss = new WebSocketServer({ noServer: true });
 
@@ -158,7 +121,6 @@ async function main() {
     }
   });
 
-  // Initialize Next.js request handlers, passing our server
   require("next");
   const { getRequestHandlers } = require("next/dist/server/lib/start-server");
   const handlers = await getRequestHandlers({
@@ -171,7 +133,6 @@ async function main() {
 
   requestHandler = handlers.requestHandler;
 
-  // Start listening
   server.listen(currentPort, hostname, () => {
     console.log(`> webmux ready on http://${hostname}:${currentPort}`);
   });
