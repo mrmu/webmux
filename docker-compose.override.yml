@@ -4,5 +4,9 @@ services:
     environment:
       VIRTUAL_HOST: webmux.test
       VIRTUAL_PORT: "3000"
+      HOST_HOME: /home/dev
     volumes:
-      - /tmp/tmux-${TMUX_UID:-501}:/tmp/tmux-${TMUX_UID:-501}:rw
+      # Mount host projects directory into container
+      - ${HOME:-/Users/audilu}/next:/home/dev/next:rw
+      # Share host home for Claude Code config files
+      - ${HOME:-/Users/audilu}/.claude:/home/dev/.claude:rw

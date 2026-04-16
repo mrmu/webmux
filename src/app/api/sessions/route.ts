@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const name = (body.name || "").trim();
   const command = body.command || undefined;
+  const cwd = body.cwd || undefined;
   const displayName = body.display_name || name;
   const color = body.color || "#6366f1";
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const session = await tmux.createSession(name, command);
+  const session = await tmux.createSession(name, command, cwd);
   await prisma.project.upsert({
     where: { name },
     update: { displayName, color },

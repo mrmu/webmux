@@ -1,128 +1,129 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function TerminalView({
   sessionName,
 }: {
   sessionName: string;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const termRef = useRef<{ terminal: unknown; ws: WebSocket | null } | null>(null);
+  const [output, setOutput] = useState("");
+  const outputRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(
+      `${proto}//${location.host}/ws/terminal/${sessionName}`
+    );
+    wsRef.current = ws;
 
-    async function initTerminal() {
-      const { Terminal } = await import("@xterm/xterm");
-      const { FitAddon } = await import("@xterm/addon-fit");
-      if (cancelled || !containerRef.current) return;
-
-      const terminal = new Terminal({
-        theme: {
-          background: "#0c0c0c",
-          foreground: "#e0e0e0",
-          cursor: "#e0e0e0",
-        },
-        fontSize: 13,
-        fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace",
-        cursorBlink: true,
-        scrollback: 10000,
-      });
-
-      const fitAddon = new FitAddon();
-      terminal.loadAddon(fitAddon);
-      terminal.open(containerRef.current);
-
-      // Small delay to let the DOM settle before fitting
-      setTimeout(() => {
-        fitAddon.fit();
-      }, 50);
-
-      // Connect WebSocket
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(
-        `${proto}//${location.host}/ws/terminal/${sessionName}`
-      );
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "output") {
-            terminal.clear();
-            terminal.write(msg.data);
-          }
-        } catch {
-          /* ignore */
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "output") {
+          setOutput(msg.data);
         }
-      };
+      } catch {
+        /* ignore */
+      }
+    };
 
-      ws.onopen = () => {
-        // Send initial resize
-        ws.send(
-          JSON.stringify({
-            type: "resize",
-            cols: terminal.cols,
-            rows: terminal.rows,
-          })
-        );
-      };
-
-      // Forward keyboard input
-      terminal.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "input", data }));
-        }
-      });
-
-      // Handle resize
-      const resizeObserver = new ResizeObserver(() => {
-        fitAddon.fit();
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(
-            JSON.stringify({
-              type: "resize",
-              cols: terminal.cols,
-              rows: terminal.rows,
-            })
-          );
-        }
-      });
-      resizeObserver.observe(containerRef.current);
-
-      termRef.current = { terminal, ws };
-
-      return () => {
-        resizeObserver.disconnect();
-      };
-    }
-
-    const cleanupPromise = initTerminal();
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
 
     return () => {
-      cancelled = true;
-      cleanupPromise.then((cleanup) => cleanup?.());
-      if (termRef.current) {
-        if (termRef.current.ws) {
-          termRef.current.ws.close();
-        }
-        (termRef.current.terminal as { dispose: () => void })?.dispose();
-        termRef.current = null;
-      }
+      ws.close();
+      wsRef.current = null;
     };
   }, [sessionName]);
 
+  // Auto-scroll to bottom on new output
+  useEffect(() => {
+    const el = outputRef.current;
+    if (!el) return;
+    const isAtBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    if (isAtBottom) el.scrollTop = el.scrollHeight;
+  }, [output]);
+
   const sendSpecial = (key: string) => {
-    const ws = termRef.current?.ws;
+    const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "special", key }));
+    }
+  };
+
+  const sendInput = (data: string) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "input", data }));
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const key = e.key;
+    let handled = true;
+
+    if (e.ctrlKey && key.length === 1) {
+      sendSpecial(`C-${key.toLowerCase()}`);
+    } else if (key === "Enter") {
+      sendSpecial("Enter");
+    } else if (key === "Backspace") {
+      sendSpecial("BSpace");
+    } else if (key === "Delete") {
+      sendSpecial("DC");
+    } else if (key === "Tab") {
+      sendSpecial("Tab");
+    } else if (key === "Escape") {
+      sendSpecial("Escape");
+    } else if (key === "ArrowUp") {
+      sendSpecial("Up");
+    } else if (key === "ArrowDown") {
+      sendSpecial("Down");
+    } else if (key === "ArrowLeft") {
+      sendSpecial("Left");
+    } else if (key === "ArrowRight") {
+      sendSpecial("Right");
+    } else {
+      handled = false;
+    }
+
+    if (handled) e.preventDefault();
+  };
+
+  const handleInput = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    const text = el.value;
+    if (text) {
+      sendInput(text);
+      el.value = "";
     }
   };
 
   return (
     <div className="view-panel terminal-view">
       <div className="terminal-wrap">
-        <div className="terminal-container" ref={containerRef} />
+        <div
+          ref={outputRef}
+          className="terminal-output"
+          onClick={() => inputRef.current?.focus()}
+        >
+          {output}
+        </div>
+        <textarea
+          ref={inputRef}
+          className="term-input-hidden"
+          autoCapitalize="none"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          onKeyDown={handleKeyDown}
+          onInput={handleInput}
+        />
       </div>
       <div className="terminal-bar">
         <button className="shortcut-btn" onClick={() => sendSpecial("C-c")}>
@@ -137,7 +138,7 @@ export default function TerminalView({
         <button className="shortcut-btn" onClick={() => sendSpecial("Tab")}>
           Tab
         </button>
-        <span className="terminal-focus-hint">Click terminal to type</span>
+        <span className="terminal-focus-hint">Tap terminal to type</span>
       </div>
     </div>
   );

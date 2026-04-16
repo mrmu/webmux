@@ -57,9 +57,11 @@ export async function listSessions(): Promise<TmuxSession[]> {
 
 export async function createSession(
   name: string,
-  command?: string
+  command?: string,
+  cwd?: string
 ): Promise<TmuxSession> {
   const args = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
+  if (cwd) args.push("-c", cwd);
   if (command) args.push(command);
   await runTmux(...args);
 

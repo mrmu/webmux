@@ -17,6 +17,7 @@ export default function NewSessionModal({
 }) {
   const [name, setName] = useState("");
   const [display, setDisplay] = useState("");
+  const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
@@ -26,6 +27,7 @@ export default function NewSessionModal({
       await api.post("/api/sessions", {
         name: name.trim(),
         display_name: display.trim() || name.trim(),
+        cwd: cwd.trim() || null,
         command: command.trim() || null,
         color,
       });
@@ -58,6 +60,15 @@ export default function NewSessionModal({
               placeholder="My Project"
               value={display}
               onChange={(e) => setDisplay(e.target.value)}
+            />
+          </label>
+          <label>
+            Working Directory
+            <input
+              type="text"
+              placeholder="/home/dev/next/my-project"
+              value={cwd}
+              onChange={(e) => setCwd(e.target.value)}
             />
           </label>
           <label>
