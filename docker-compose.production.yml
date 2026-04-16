@@ -1,17 +1,20 @@
 # Production overrides (Linux/GCP)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
-# On Linux, tmux can run on host — mount the socket for persistence
+#
+# Key: container runs as the SAME UID as host user (devops_bot = 1002:1003)
+# This lets tmux in the container connect to the host's tmux server via socket.
+# Claude Code runs on the HOST inside tmux sessions — not in the container.
 services:
   app:
+    user: "1002:1003"
     environment:
       VIRTUAL_HOST: webmux.pangogo.com
       VIRTUAL_PORT: "3000"
       LETSENCRYPT_HOST: webmux.pangogo.com
       LETSENCRYPT_EMAIL: audilu@panmedia.asia
       PROJECTS_ROOT: /home/devops_bot
-      # Uncomment to use host tmux (Linux only, not macOS Docker Desktop)
-      # TMUX_SOCKET: /tmp/host-tmux/default
     volumes:
+      # Host tmux socket — container tmux connects to host tmux server
+      - /tmp/tmux-1002:/tmp/tmux-1002:rw
+      # Host home directory — all projects, claude config, ssh keys
       - /home/devops_bot:/home/devops_bot:rw
-      # Uncomment for host tmux socket (Linux only)
-      # - /tmp/tmux-1002:/tmp/host-tmux:rw
