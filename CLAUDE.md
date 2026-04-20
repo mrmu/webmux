@@ -2,18 +2,22 @@
 
 AI-Ops development platform — web-based tmux session manager with Claude Code integration.
 
+## Repository
+
+GitHub: `git@github.com:mrmu/webmux.git`
+
 ## Architecture
 
 ```
 Host (Linux VPS / macOS)
 ├── tmux server              ← session 持久化，容器重啟不受影響
 ├── Claude Code CLI          ← 已安裝、已認證 (Max Plan)
-├── ~/projects/              ← 所有專案目錄
+├── {projectsRoot}/          ← 所有專案目錄 (DB 設定)
 └── ~/.claude/               ← Claude Code 認證 + 設定
 
 Docker
 ├── webmux (Next.js)         ← web UI + API，以 host UID 跑
-├── PostgreSQL               ← 專案 metadata、用戶帳號、notes
+├── PostgreSQL               ← 專案 metadata、用戶帳號、settings
 └── wp-proxy network         ← nginx reverse proxy + HTTPS
 ```
 
@@ -25,9 +29,10 @@ Docker
 
 - **Framework**: Next.js 16 (App Router, standalone output)
 - **Database**: PostgreSQL via Prisma 7
-- **Auth**: Email + password (bcrypt + JWT)
+- **Auth**: Email + password (bcrypt + JWT), admin-only registration
 - **Terminal**: xterm.js + WebSocket + node-pty → tmux attach-session (PTY)
 - **Chat**: SSE (fs.watch JSONL) + fetch (initial load)
+- **DNS**: Cloudflare API (CF_API_TOKEN + CF_ZONE_ID)
 - **UI**: Custom CSS (mobile-first, no framework)
 
 ## 本機開發 (macOS)
@@ -44,7 +49,7 @@ docker compose up -d db dev-proxy
 npm run dev
 
 # 開啟 http://webmux.test
-# 首次使用會要求建立 admin 帳號
+# 首次使用會要求建立 admin 帳號 + 設定專案目錄
 ```
 
 - `npm run dev` 跑兩個進程：Next.js (port 3000) + terminal WebSocket (port 3001)
@@ -54,6 +59,13 @@ npm run dev
 ## Production 部署 (Linux)
 
 ```bash
+# 首次
+git clone git@github.com:mrmu/webmux.git ~/webmux && cd ~/webmux
+cp .env.example .env  # 編輯設定
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+
+# 更新
+cd ~/webmux && git pull
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
 ```
 
@@ -77,11 +89,21 @@ src/
     api/            # REST API routes
       auth/         # login, register, logout, password, users
       sessions/     # CRUD, chat, chat-stream (SSE), files, hosts, windows
+      dns/          # Cloudflare DNS management
+      config/       # Frontend config (projectsRoot)
+      settings/     # DB-backed settings CRUD
   components/       # React client components
-  lib/              # Server utilities (tmux, auth, validate, parsers)
+  lib/              # Server utilities
+    tmux.ts         # tmux command adapter
+    auth.ts         # JWT + bcrypt auth
+    settings.ts     # DB settings (projectsRoot, etc.)
+    cloudflare.ts   # Cloudflare DNS API
+    validate.ts     # Input validation (session name, cwd, command)
+    jsonl-parser.ts # Claude Code JSONL conversation parser
+    project-cwd.ts  # Get project working directory from DB
   generated/        # Prisma client (auto-generated)
 prisma/             # DB schema
-server.ts           # Dev custom server
+server.ts           # Dev custom server (unused, kept for reference)
 ws-server.ts        # WebSocket terminal (shared dev/prod)
 ws-dev-server.ts    # Dev: standalone WS server on port 3001
 prod-server.js      # Production: standalone Next.js + WS
@@ -91,6 +113,7 @@ docs/deploy/        # Deployment guide
 ## DB Schema
 
 - **User**: email (unique), password (bcrypt), name
+- **Setting**: key-value store (projectsRoot, etc.)
 - **Project**: name, displayName, color, cwd, command, jsonlSessionId
 - **Host**: projectName → sshTarget, env (production/staging/development)
 - **Note**: sessionName → content (一對多)
@@ -98,8 +121,12 @@ docs/deploy/        # Deployment guide
 ## Security
 
 - Session name 驗證: `/^[a-zA-Z0-9_-]+$/`，tmux `-t =name` 強制精確匹配
-- CWD 限制在 PROJECTS_ROOT 內
-- WebSocket origin allowlist
+- CWD 限制在 projectsRoot (DB setting) 內
+- Command 驗證：拒絕 shell metacharacters
+- WebSocket origin allowlist (ALLOWED_ORIGINS env)
 - Login rate limit (5/min per IP)
 - Cookie: httpOnly + sameSite:strict + secure (prod)
 - 首個用戶自助註冊，之後只能管理員建帳號
+- Restore 不自動執行 DB 中的 command
+
+## 每次修改都要先測試，前後端都要，然後確認功能正常。

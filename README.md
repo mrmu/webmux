@@ -4,12 +4,13 @@ Web-based tmux session manager for Claude Code. Manage multiple AI-assisted deve
 
 ## What it does
 
-- **Terminal** — xterm.js connected to host tmux via PTY (real terminal, not capture-pane)
-- **Chat** — Read Claude Code conversations (parsed from JSONL, pushed via SSE)
+- **Terminal** — xterm.js connected to host tmux via PTY (real terminal)
+- **Chat** — Claude Code conversations (JSONL parsing, SSE live push)
 - **Files** — Browse and edit project files
 - **Projects** — Each project = one tmux session with multiple windows
 - **Hosts** — Track deployment targets (SSH/Tailscale machines) per project
-- **DNS** — Manage Cloudflare DNS records for `*.your-domain.com`
+- **DNS** — Manage Cloudflare DNS records
+- **Auth** — Email/password accounts (bcrypt + JWT), admin-only registration
 
 ## Architecture
 
@@ -27,7 +28,7 @@ webmux is a **web UI only**. It does NOT install or run Claude Code — that run
 
 ```bash
 # Prerequisites: Docker, tmux, Claude Code (authenticated), Node.js
-git clone <repo> ~/webmux && cd ~/webmux
+git clone git@github.com:mrmu/webmux.git ~/webmux && cd ~/webmux
 
 # Configure
 cp .env.example .env  # edit: HOST_UID, VIRTUAL_HOST, secrets
@@ -36,7 +37,14 @@ cp .env.example .env  # edit: HOST_UID, VIRTUAL_HOST, secrets
 docker network create wp-proxy 2>/dev/null || true
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
 
-# Open https://your-domain.com → create admin account
+# Open https://your-domain.com → first-time setup (admin account + projects directory)
+```
+
+### Update
+
+```bash
+cd ~/webmux && git pull
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
 ```
 
 ### Local Dev (macOS)
@@ -55,4 +63,5 @@ npm run dev                         # http://webmux.test
 | `src/lib/tmux.ts` | tmux command adapter |
 | `src/lib/cloudflare.ts` | Cloudflare DNS API |
 | `src/lib/auth.ts` | Email/password auth (bcrypt + JWT) |
+| `src/lib/settings.ts` | DB-backed settings (projects root, etc.) |
 | `docs/deploy/setup.md` | Full deployment guide |
