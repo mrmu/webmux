@@ -13,8 +13,9 @@ model Project {
   displayName String   @map("display_name")
   description String   @default("")
   color       String   @default("#6366f1")
-  cwd         String   @default("")
-  command     String   @default("")
+  cwd            String   @default("")
+  command        String   @default("")
+  jsonlSessionId String   @default("") @map("jsonl_session_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   notes       Note[]

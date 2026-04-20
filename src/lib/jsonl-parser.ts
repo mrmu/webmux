@@ -26,32 +26,51 @@ export interface ChatMessage {
 }
 
 /**
- * Find the most recent JSONL session file for a project.
- * Claude Code stores sessions at: ~/.claude/projects/{encoded-cwd}/{session-id}.jsonl
- * Encoded cwd: replace non-alphanumeric chars with `-`
+ * Get the JSONL project directory for a given cwd.
+ * Claude Code encodes: /Users/foo/bar → -Users-foo-bar
  */
-export function findSessionJsonlByCwd(projectCwd: string): string | null {
-  if (!projectCwd) return null;
-
-  // Encode cwd the same way Claude Code does: /Users/foo/bar → -Users-foo-bar
+function getProjectDir(projectCwd: string): string | null {
   const encodedCwd = projectCwd.replace(/[^a-zA-Z0-9-]/g, "-");
   const projectDir = path.join(CLAUDE_PROJECTS, encodedCwd);
+  return fs.existsSync(projectDir) ? projectDir : null;
+}
 
-  if (!fs.existsSync(projectDir)) return null;
+/**
+ * Find the JSONL file for a specific session ID.
+ */
+export function findSessionJsonlById(
+  projectCwd: string,
+  sessionId: string
+): string | null {
+  if (!projectCwd || !sessionId) return null;
+  const dir = getProjectDir(projectCwd);
+  if (!dir) return null;
+  const filePath = path.join(dir, `${sessionId}.jsonl`);
+  return fs.existsSync(filePath) ? filePath : null;
+}
 
-  // Find all JSONL files and pick the most recently modified
+/**
+ * List all JSONL sessions for a project, sorted by most recent.
+ */
+export function listSessionJsonls(
+  projectCwd: string
+): { sessionId: string; path: string; mtime: number }[] {
+  if (!projectCwd) return [];
+  const dir = getProjectDir(projectCwd);
+  if (!dir) return [];
+
   try {
-    const files = fs.readdirSync(projectDir)
+    return fs
+      .readdirSync(dir)
       .filter((f) => f.endsWith(".jsonl"))
-      .map((f) => {
-        const fullPath = path.join(projectDir, f);
-        return { path: fullPath, mtime: fs.statSync(fullPath).mtimeMs };
-      })
+      .map((f) => ({
+        sessionId: f.replace(".jsonl", ""),
+        path: path.join(dir, f),
+        mtime: fs.statSync(path.join(dir, f)).mtimeMs,
+      }))
       .sort((a, b) => b.mtime - a.mtime);
-
-    return files.length > 0 ? files[0].path : null;
   } catch {
-    return null;
+    return [];
   }
 }
 
