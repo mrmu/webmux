@@ -8,6 +8,7 @@ import TerminalView from "./TerminalView";
 import FileBrowser from "./FileBrowser";
 import FileEditor from "./FileEditor";
 import NotesPanel from "./NotesPanel";
+import ProjectSettings from "./ProjectSettings";
 
 interface OpenFile {
   path: string;
@@ -28,6 +29,7 @@ export default function Workspace({
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [showFiles, setShowFiles] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [uiState, setUiState] = useState<{
     interactive: boolean;
     type: string | null;
@@ -164,6 +166,13 @@ export default function Workspace({
         </div>
         <button
           className="icon-btn view-bar-btn"
+          title="Settings"
+          onClick={() => setShowSettings(!showSettings)}
+        >
+          &#x2699;
+        </button>
+        <button
+          className="icon-btn view-bar-btn"
           title="Notes"
           onClick={() => setShowNotes(!showNotes)}
         >
@@ -228,6 +237,15 @@ export default function Workspace({
           <NotesPanel
             sessionName={activeProject}
             onClose={() => setShowNotes(false)}
+          />
+        )}
+
+        {/* Settings Panel */}
+        {showSettings && (
+          <ProjectSettings
+            projectName={activeProject}
+            onClose={() => setShowSettings(false)}
+            onDeleted={onBack}
           />
         )}
       </div>
