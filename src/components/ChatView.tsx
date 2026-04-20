@@ -52,22 +52,40 @@ export default function ChatView({
   const messagesRef = useRef<HTMLDivElement>(null);
   const lastHashRef = useRef("");
 
+  const pollingRef = useRef(false);
+
   const refreshChat = useCallback(async () => {
+    if (pollingRef.current) return; // skip if previous poll still running
+    pollingRef.current = true;
     try {
-      const data = await api.get(`/api/sessions/${sessionName}/chat`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`/api/sessions/${sessionName}/chat`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return;
+      const data = await res.json();
       const msgs: ChatMessage[] = data.messages || [];
-      const hash = msgs.length + ":" + (msgs[msgs.length - 1]?.text || "").length;
+      const hash =
+        msgs.length +
+        ":" +
+        (msgs[msgs.length - 1]?.text || "").length +
+        ":" +
+        (msgs[msgs.length - 1]?.result || "");
       if (hash === lastHashRef.current) return;
       lastHashRef.current = hash;
       setMessages(msgs);
     } catch {
-      /* ignore */
+      /* timeout or network error — will retry next tick */
+    } finally {
+      pollingRef.current = false;
     }
   }, [sessionName]);
 
   useEffect(() => {
     refreshChat();
-    const interval = setInterval(refreshChat, 1500);
+    const interval = setInterval(refreshChat, 2000);
     return () => clearInterval(interval);
   }, [refreshChat]);
 

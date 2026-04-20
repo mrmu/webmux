@@ -10,6 +10,6 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { name } = await params;
-  const content = await tmux.capturePane(name);
+  const content = await tmux.capturePane(name, 32768);
   return NextResponse.json({ content });
 }

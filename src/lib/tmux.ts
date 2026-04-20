@@ -108,8 +108,11 @@ export async function sendSpecialKey(
   await runTmux("send-keys", "-t", sessionName, key);
 }
 
-export async function capturePane(sessionName: string): Promise<string> {
-  return runTmux("capture-pane", "-t", sessionName, "-p", "-S", "-32768");
+export async function capturePane(
+  sessionName: string,
+  scrollback = 500
+): Promise<string> {
+  return runTmux("capture-pane", "-t", sessionName, "-p", "-S", `-${scrollback}`);
 }
 
 export async function getPaneCommand(sessionName: string): Promise<string> {

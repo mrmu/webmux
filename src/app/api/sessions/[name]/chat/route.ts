@@ -21,8 +21,8 @@ export async function GET(
     }
   }
 
-  // Fallback: terminal parsing
-  const content = await tmux.capturePane(name);
+  // Fallback: terminal parsing (limited scrollback for fast polling)
+  const content = await tmux.capturePane(name, 500);
   const messages = tmux.parseClaudeConversation(content);
   return NextResponse.json({ messages, source: "terminal" });
 }
