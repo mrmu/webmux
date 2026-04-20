@@ -225,15 +225,26 @@ export default function ChatView({
 
   const [restarting, setRestarting] = useState(false);
 
-  const restartClaude = async () => {
+  const startClaude = async () => {
     setRestarting(true);
     try {
+      // Ensure tmux session exists (creates if not)
+      await api.post("/api/sessions", {
+        name: sessionName,
+        display_name: sessionName,
+      }).catch(() => {}); // ignore if already exists
+
+      // Small delay for session to be ready
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Send the claude command
       await api.post(`/api/sessions/${sessionName}/send`, {
         text: "claude --dangerously-skip-permissions",
       });
       setTimeout(() => setRestarting(false), 3000);
     } catch {
       setRestarting(false);
+      alert("Failed to start Claude Code. Check the Terminal tab.");
     }
   };
 
@@ -242,12 +253,12 @@ export default function ChatView({
       <MessageList messages={messages} innerRef={messagesRef} />
 
       {/* Idle Banner — shown when no Claude Code is running */}
-      {uiState?.idle && (
+      {(uiState === null || uiState?.idle) && (
         <div className="idle-banner">
           <span className="idle-text">Claude Code is not running</span>
           <button
             className="idle-restart-btn"
-            onClick={restartClaude}
+            onClick={startClaude}
             disabled={restarting}
           >
             {restarting ? "Starting..." : "▶ Start Claude Code"}
@@ -296,8 +307,8 @@ export default function ChatView({
         </div>
       )}
 
-      {/* Chat Input */}
-      {!uiState?.interactive && !uiState?.idle && (
+      {/* Chat Input — only when Claude is running and not in interactive UI */}
+      {uiState && !uiState.interactive && !uiState.idle && (
         <div className="chat-input-area">
           <div className="chat-input-row">
             <textarea
