@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
+import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
 
 export async function GET(request: NextRequest) {
   if (!requireAuth(request))
@@ -76,9 +77,23 @@ export async function POST(request: NextRequest) {
   const displayName = body.display_name || name;
   const color = body.color || "#6366f1";
 
-  if (!name) {
+  if (!name || !isValidSessionName(name)) {
     return NextResponse.json(
-      { error: "Session name is required" },
+      { error: "Invalid project name (alphanumeric, dash, underscore only)" },
+      { status: 400 }
+    );
+  }
+
+  if (cwd && !isValidCwd(cwd)) {
+    return NextResponse.json(
+      { error: "Working directory must be within PROJECTS_ROOT" },
+      { status: 400 }
+    );
+  }
+
+  if (command && !isValidCommand(command)) {
+    return NextResponse.json(
+      { error: "Invalid command" },
       { status: 400 }
     );
   }

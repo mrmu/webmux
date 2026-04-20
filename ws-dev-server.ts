@@ -1,14 +1,17 @@
 /**
  * Standalone terminal WebSocket server for development.
- * Runs alongside `next dev` on a separate port.
- *
- * Usage: npx tsx ws-dev-server.ts
+ * Binds to 127.0.0.1 only (not exposed to LAN).
  */
 
 import { createServer } from "http";
 import { setupWebSocket } from "./ws-server";
 
 const port = parseInt(process.env.WS_PORT || "3001", 10);
+const host = "127.0.0.1";
+
+if (!process.env.WEBMUX_PASSWORD) {
+  console.warn("⚠ WEBMUX_PASSWORD not set — auth disabled. Binding to localhost only.");
+}
 
 const server = createServer((_req, res) => {
   res.writeHead(200);
@@ -17,6 +20,6 @@ const server = createServer((_req, res) => {
 
 setupWebSocket(server);
 
-server.listen(port, () => {
-  console.log(`> terminal WebSocket server on ws://localhost:${port}`);
+server.listen(port, host, () => {
+  console.log(`> terminal WebSocket server on ws://${host}:${port}`);
 });

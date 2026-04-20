@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { isValidCwd, isValidCommand } from "@/lib/validate";
 
 export async function PUT(
   request: NextRequest,
@@ -11,6 +12,22 @@ export async function PUT(
 
   const { name } = await params;
   const body = await request.json();
+
+  // Validate cwd if provided
+  if (body.cwd !== undefined && body.cwd !== "" && !isValidCwd(body.cwd)) {
+    return NextResponse.json(
+      { error: "Working directory must be within PROJECTS_ROOT" },
+      { status: 400 }
+    );
+  }
+
+  // Validate command if provided
+  if (body.command !== undefined && body.command !== "" && !isValidCommand(body.command)) {
+    return NextResponse.json(
+      { error: "Invalid command" },
+      { status: 400 }
+    );
+  }
 
   await prisma.project.upsert({
     where: { name },

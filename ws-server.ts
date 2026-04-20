@@ -1,8 +1,5 @@
 /**
  * WebSocket server for terminal streaming via PTY.
- *
- * Instead of polling tmux capture-pane, we spawn `tmux attach-session`
- * through a real PTY. This gives proper ANSI output for xterm.js.
  */
 
 import { Server as HttpServer, IncomingMessage } from "http";
@@ -10,6 +7,14 @@ import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import crypto from "crypto";
+
+// ─── Validation ────────────────────────────────────────────────────
+
+const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+
+function isValidSessionName(name: string): boolean {
+  return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
+}
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
@@ -41,6 +46,24 @@ function getCookieValue(header: string | undefined, name: string): string | null
   return match ? match[1] : null;
 }
 
+// ─── Allowed origins ───────────────────────────────────────────────
+
+const ALLOWED_ORIGINS = new Set(
+  (process.env.ALLOWED_ORIGINS || "webmux.test,localhost")
+    .split(",")
+    .map((o) => o.trim().toLowerCase())
+);
+
+function isOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true; // no origin = same-origin or non-browser
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return ALLOWED_ORIGINS.has(hostname);
+  } catch {
+    return false;
+  }
+}
+
 // ─── WebSocket setup ───────────────────────────────────────────────
 
 export function setupWebSocket(server: HttpServer) {
@@ -50,6 +73,14 @@ export function setupWebSocket(server: HttpServer) {
     const { pathname } = parse(request.url || "", true);
 
     if (pathname && pathname.startsWith("/ws/terminal/")) {
+      // Origin check
+      if (!isOriginAllowed(request.headers.origin)) {
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
+      // Auth check
       const token = getCookieValue(request.headers.cookie, "webmux_token");
       if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -57,11 +88,18 @@ export function setupWebSocket(server: HttpServer) {
         return;
       }
 
+      // Parse and validate session name
+      const parts = pathname.replace("/ws/terminal/", "").split("/");
+      const sessionName = decodeURIComponent(parts[0]);
+      const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
+
+      if (!isValidSessionName(sessionName)) {
+        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
       wss.handleUpgrade(request, socket, head, (ws) => {
-        // URL: /ws/terminal/{session} or /ws/terminal/{session}/{windowIndex}
-        const parts = pathname.replace("/ws/terminal/", "").split("/");
-        const sessionName = parts[0];
-        const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
         handleTerminalConnection(ws, sessionName, windowIndex);
       });
     }
@@ -70,11 +108,12 @@ export function setupWebSocket(server: HttpServer) {
 }
 
 function handleTerminalConnection(ws: WebSocket, sessionName: string, windowIndex?: number) {
-  // Target: session:window if specified, otherwise just session
+  // Use ={name} for exact match (prevents fnmatch pattern injection)
   const target =
-    windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
+    windowIndex !== undefined
+      ? `=${sessionName}:${windowIndex}`
+      : `=${sessionName}`;
 
-  // Spawn tmux attach through a real PTY, targeting specific window
   const socketArgs = process.env.TMUX_SOCKET
     ? ["-S", process.env.TMUX_SOCKET]
     : [];
@@ -82,14 +121,14 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
     "tmux",
     [...socketArgs, "attach-session", "-t", target],
     {
-    name: "xterm-256color",
-    cols: 80,
-    rows: 24,
-    cwd: process.cwd(),
-    env: process.env as Record<string, string>,
-  });
+      name: "xterm-256color",
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      env: process.env as Record<string, string>,
+    }
+  );
 
-  // PTY output → WebSocket → xterm.js
   ptyProcess.onData((data: string) => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "output", data }));
@@ -102,7 +141,6 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
     }
   });
 
-  // WebSocket → PTY
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -116,11 +154,6 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
     }
   });
 
-  ws.on("close", () => {
-    ptyProcess.kill();
-  });
-
-  ws.on("error", () => {
-    ptyProcess.kill();
-  });
+  ws.on("close", () => ptyProcess.kill());
+  ws.on("error", () => ptyProcess.kill());
 }

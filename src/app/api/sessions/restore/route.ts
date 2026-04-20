@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
+import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
 
 /** Restore all DB-saved sessions that aren't currently running in tmux. */
 export async function POST(request: NextRequest) {
@@ -13,23 +14,26 @@ export async function POST(request: NextRequest) {
 
   const projects = await prisma.project.findMany();
   const restored: string[] = [];
+  const skipped: string[] = [];
   const failed: string[] = [];
 
   for (const p of projects) {
-    if (liveNames.has(p.name)) continue; // already running
-    if (!p.cwd && !p.command) continue; // no info to restore
+    if (liveNames.has(p.name)) continue;
+    if (!p.cwd) continue;
+
+    // Validate before executing anything from DB
+    if (!isValidSessionName(p.name)) { skipped.push(p.name); continue; }
+    if (p.cwd && !isValidCwd(p.cwd)) { skipped.push(p.name); continue; }
+    if (p.command && !isValidCommand(p.command)) { skipped.push(p.name); continue; }
 
     try {
-      await tmux.createSession(
-        p.name,
-        p.command || undefined,
-        p.cwd || undefined
-      );
+      // Restore with cwd only — don't auto-execute commands
+      await tmux.createSession(p.name, undefined, p.cwd || undefined);
       restored.push(p.name);
     } catch {
       failed.push(p.name);
     }
   }
 
-  return NextResponse.json({ restored, failed });
+  return NextResponse.json({ restored, skipped, failed });
 }

@@ -53,8 +53,9 @@ function getCookieValue(header, name) {
 
 function handleTerminal(ws, sessionName, windowIndex) {
   const pty = require("node-pty");
+  // Use ={name} for exact match (prevents fnmatch pattern injection)
   const target =
-    windowIndex !== undefined ? `${sessionName}:${windowIndex}` : sessionName;
+    windowIndex !== undefined ? `=${sessionName}:${windowIndex}` : `=${sessionName}`;
 
   const socketArgs = process.env.TMUX_SOCKET
     ? ["-S", process.env.TMUX_SOCKET]
@@ -106,10 +107,34 @@ async function main() {
   const { WebSocketServer } = require("ws");
   const wss = new WebSocketServer({ noServer: true });
 
+  const SAFE_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+  const ALLOWED_ORIGINS = new Set(
+    (process.env.ALLOWED_ORIGINS || process.env.VIRTUAL_HOST || "localhost")
+      .split(",").map((o) => o.trim().toLowerCase())
+  );
+
   server.on("upgrade", (request, socket, head) => {
     const { pathname } = parse(request.url || "", true);
 
     if (pathname && pathname.startsWith("/ws/terminal/")) {
+      // Origin check
+      const origin = request.headers.origin;
+      if (origin) {
+        try {
+          const host = new URL(origin).hostname.toLowerCase();
+          if (!ALLOWED_ORIGINS.has(host)) {
+            socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+            socket.destroy();
+            return;
+          }
+        } catch {
+          socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+          socket.destroy();
+          return;
+        }
+      }
+
+      // Auth check
       const token = getCookieValue(request.headers.cookie, "webmux_token");
       if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
@@ -117,15 +142,22 @@ async function main() {
         return;
       }
 
+      // Validate session name
+      const parts = pathname.replace("/ws/terminal/", "").split("/");
+      const sessionName = decodeURIComponent(parts[0]);
+      const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
+
+      if (!SAFE_NAME_RE.test(sessionName)) {
+        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
       wss.handleUpgrade(request, socket, head, (ws) => {
-        const parts = pathname.replace("/ws/terminal/", "").split("/");
-        const sessionName = parts[0];
-        const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
         handleTerminal(ws, sessionName, windowIndex);
       });
-    } else {
-      socket.destroy();
     }
+    // Don't destroy — let Next.js handle other upgrades
   });
 
   require("next");
