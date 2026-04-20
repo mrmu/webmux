@@ -1,7 +1,26 @@
-# Local development overrides
-# DB port exposed for `npm run dev` on host
-# App container not used locally — run `npm run dev` directly
+# Local development (macOS)
+# Run: docker compose up -d db dev-proxy
+# Then: npm run dev
 services:
   db:
     ports:
       - "5432:5432"
+
+  # Lightweight proxy: nginx-proxy → host dev server
+  # This lets webmux.test work while npm run dev runs on the host
+  dev-proxy:
+    image: alpine/socat
+    command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
+    restart: unless-stopped
+    environment:
+      VIRTUAL_HOST: webmux.test
+      VIRTUAL_PORT: "3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wp-proxy
+      - default
+
+  # App container not used locally
+  app:
+    profiles: ["production"]
