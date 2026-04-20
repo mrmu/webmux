@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidCwd, isValidCommand } from "@/lib/validate";
+import { getProjectsRoot } from "@/lib/settings";
 
 export async function PUT(
   request: NextRequest,
@@ -14,7 +15,8 @@ export async function PUT(
   const body = await request.json();
 
   // Validate cwd if provided
-  if (body.cwd !== undefined && body.cwd !== "" && !isValidCwd(body.cwd)) {
+  const projectsRoot = await getProjectsRoot();
+  if (body.cwd !== undefined && body.cwd !== "" && !isValidCwd(body.cwd, projectsRoot)) {
     return NextResponse.json(
       { error: "Working directory must be within PROJECTS_ROOT" },
       { status: 400 }

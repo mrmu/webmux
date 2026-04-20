@@ -7,11 +7,8 @@ export function isValidSessionName(name: string): boolean {
   return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
 }
 
-/** Validate cwd is within PROJECTS_ROOT */
-export function isValidCwd(cwd: string): boolean {
-  const projectsRoot =
-    process.env.PROJECTS_ROOT ||
-    `${process.env.HOME || "/home/user"}/next`;
+/** Validate cwd is within the given projects root */
+export function isValidCwd(cwd: string, projectsRoot: string): boolean {
   const resolved = path.resolve(cwd);
   const root = path.resolve(projectsRoot);
   return resolved === root || resolved.startsWith(root + path.sep);

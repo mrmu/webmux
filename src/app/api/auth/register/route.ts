@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { register, COOKIE_NAME } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { setSetting } from "@/lib/settings";
 
 export async function POST(request: NextRequest) {
   // Only allow registration if no users exist (first user setup)
-  // or if already authenticated (admin creating accounts)
   const userCount = await prisma.user.count().catch(() => 0);
   if (userCount > 0) {
-    // For now, only first user can self-register
     return NextResponse.json(
       { error: "Registration disabled. Contact admin." },
       { status: 403 }
@@ -23,6 +22,11 @@ export async function POST(request: NextRequest) {
 
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
+  }
+
+  // Save projectsRoot from setup
+  if (body.projectsRoot) {
+    await setSetting("projectsRoot", body.projectsRoot);
   }
 
   const isProduction = process.env.NODE_ENV === "production";

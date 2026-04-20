@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
 import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
+import { getProjectsRoot } from "@/lib/settings";
 
 export async function GET(request: NextRequest) {
   if (!requireAuth(request))
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const name = (body.name || "").trim();
-  const projectsRoot = process.env.PROJECTS_ROOT || `${process.env.HOME || "/Users/audilu"}/next`;
+  const projectsRoot = await getProjectsRoot();
   const cwd = body.cwd || `${projectsRoot}/${name}`;
   const command = body.command || undefined;
   const displayName = body.display_name || name;
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (cwd && !isValidCwd(cwd)) {
+  if (cwd && !isValidCwd(cwd, projectsRoot)) {
     return NextResponse.json(
       { error: "Working directory must be within PROJECTS_ROOT" },
       { status: 400 }

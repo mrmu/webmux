@@ -30,6 +30,9 @@ export default function AccountPage({
   const [newName, setNewName] = useState("");
   const [newUserPw, setNewUserPw] = useState("");
   const [addMsg, setAddMsg] = useState("");
+  // Settings
+  const [projectsRoot, setProjectsRoot] = useState("");
+  const [settingsMsg, setSettingsMsg] = useState("");
 
   const loadUsers = useCallback(async () => {
     try {
@@ -39,9 +42,17 @@ export default function AccountPage({
     }
   }, []);
 
+  const loadSettings = useCallback(async () => {
+    try {
+      const s = await api.get("/api/settings");
+      setProjectsRoot(s.projectsRoot || "");
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     loadUsers();
-  }, [loadUsers]);
+    loadSettings();
+  }, [loadUsers, loadSettings]);
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
@@ -108,6 +119,26 @@ export default function AccountPage({
       </header>
 
       <div className="account-content">
+        {/* Projects Root */}
+        <section className="settings-section">
+          <h3>Projects Directory</h3>
+          <label>
+            Root path for all projects
+            <input type="text" value={projectsRoot}
+              onChange={(e) => setProjectsRoot(e.target.value)} />
+          </label>
+          <button className="btn-primary" onClick={async () => {
+            setSettingsMsg("");
+            try {
+              await api.put("/api/settings", { projectsRoot });
+              setSettingsMsg("Saved");
+            } catch { setSettingsMsg("Failed"); }
+          }} style={{ marginTop: "0.5rem", padding: "0.5rem 1.5rem" }}>
+            Save
+          </button>
+          {settingsMsg && <p className={`settings-hint ${settingsMsg === "Saved" ? "success-text" : "error-text"}`}>{settingsMsg}</p>}
+        </section>
+
         {/* Change Password */}
         <section className="settings-section">
           <h3>Change Password</h3>

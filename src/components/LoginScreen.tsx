@@ -13,6 +13,7 @@ export default function LoginScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [projectsRoot, setProjectsRoot] = useState("/root/projects");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -23,7 +24,7 @@ export default function LoginScreen({
 
     try {
       if (isFirstUser) {
-        await api.post("/api/auth/register", { email, password, name });
+        await api.post("/api/auth/register", { email, password, name, projectsRoot });
       } else {
         await api.post("/api/auth/login", { email, password });
       }
@@ -74,6 +75,15 @@ export default function LoginScreen({
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={isFirstUser ? "new-password" : "current-password"}
           />
+          {isFirstUser && (
+            <input
+              type="text"
+              placeholder="Projects directory (e.g. /root/projects)"
+              value={projectsRoot}
+              onChange={(e) => setProjectsRoot(e.target.value)}
+              required
+            />
+          )}
           <button type="submit" disabled={loading}>
             {loading ? "..." : isFirstUser ? "Create Account" : "Sign In"}
           </button>

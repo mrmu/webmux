@@ -17,6 +17,13 @@ model User {
   @@map("users")
 }
 
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}
+
 model Project {
   id          Int      @id @default(autoincrement())
   name        String   @unique // tmux session name
