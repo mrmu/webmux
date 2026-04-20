@@ -149,27 +149,19 @@ export default function ProjectSettings({
       </div>
 
       <div className="settings-content">
-        {/* Basic Info */}
+        {/* General */}
         <section className="settings-section">
           <h3>General</h3>
-          <label>
-            Display Name
+          <div className="form-row">
+            <label>Display Name</label>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-          </label>
-          <label>
-            Working Directory
+          </div>
+          <div className="form-row">
+            <label>Working Directory</label>
             <input type="text" value={cwd} onChange={(e) => setCwd(e.target.value)} />
-          </label>
-          <label>
-            Repository URL
-            <input type="url" placeholder="https://github.com/user/repo" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
-          </label>
-          <label>
-            Repository Token (PAT)
-            <input type="password" placeholder={repoToken ? "••••••" : "GitHub/Bitbucket personal access token"} value={repoToken === "***" ? "" : repoToken} onChange={(e) => setRepoToken(e.target.value)} />
-          </label>
-          <label>
-            Color
+          </div>
+          <div className="form-row">
+            <label>Color</label>
             <div className="color-picker">
               {COLORS.map((c) => (
                 <button key={c} type="button"
@@ -179,12 +171,31 @@ export default function ProjectSettings({
                 />
               ))}
             </div>
-          </label>
-          <button className="btn-primary" onClick={saveProject} disabled={saving}
-            style={{ marginTop: "0.5rem", flex: "none", padding: "0.5rem 1.5rem" }}>
-            {saving ? "Saving..." : "Save"}
-          </button>
+          </div>
         </section>
+
+        {/* Repository */}
+        <section className="settings-section">
+          <h3>Repository</h3>
+          <div className="form-row">
+            <label>URL</label>
+            <input type="url" placeholder="https://github.com/user/repo" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Token (PAT)</label>
+            <input type="password" placeholder={repoToken ? "••••••••" : "Personal access token"}
+              value={repoToken === "***" ? "" : repoToken}
+              onChange={(e) => setRepoToken(e.target.value)} />
+          </div>
+        </section>
+
+        {/* Save */}
+        <div style={{ padding: "0 0 0.5rem" }}>
+          <button className="btn-primary" onClick={saveProject} disabled={saving}
+            style={{ padding: "0.5rem 1.5rem" }}>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
 
         {/* Hosts */}
         <section className="settings-section">

@@ -1036,17 +1036,20 @@ html, body {
   text-transform: uppercase; letter-spacing: 0.05em;
 }
 .settings-section label {
-  display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.6rem;
+  display: block; font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.25rem;
 }
 .settings-section input[type="text"],
+.settings-section input[type="url"],
+.settings-section input[type="password"],
 .settings-section select {
-  display: block; width: 100%; margin-top: 0.3rem;
+  display: block; width: 100%;
   padding: 0.55rem 0.75rem; border: 1px solid var(--bg-input);
   border-radius: var(--radius-sm); background: var(--bg-input);
-  color: var(--text); font-size: 0.9rem; outline: none;
+  color: var(--text); font-size: 0.88rem; outline: none;
 }
 .settings-section input:focus,
 .settings-section select:focus { border-color: var(--accent); }
+.settings-section .form-row { margin-bottom: 0.7rem; }
 .settings-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem; }
 
 /* Host list */
