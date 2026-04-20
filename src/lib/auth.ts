@@ -1,79 +1,113 @@
-import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+import { prisma } from "./db";
 
-const AUTH_PASSWORD = process.env.WEBMUX_PASSWORD || "";
-const AUTH_SECRET =
-  process.env.WEBMUX_SECRET || crypto.randomBytes(32).toString("hex");
+const JWT_SECRET =
+  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
+const COOKIE_NAME = "webmux_token";
 
-function generateToken(): string {
-  const day = Math.floor(Date.now() / 86_400_000);
-  return crypto
-    .createHmac("sha256", AUTH_SECRET)
-    .update(String(day))
-    .digest("hex");
+interface JwtPayload {
+  userId: number;
+  email: string;
 }
 
-function verifyToken(token: string): boolean {
-  const day = Math.floor(Date.now() / 86_400_000);
-  for (const offset of [0, 1]) {
-    const expected = crypto
-      .createHmac("sha256", AUTH_SECRET)
-      .update(String(day - offset))
-      .digest("hex");
-    if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected))) {
-      return true;
-    }
+// ─── Token management ──────────────────────────────────────────────
+
+function generateToken(user: { id: number; email: string }): string {
+  return jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    expiresIn: "7d",
+  });
+}
+
+function verifyToken(token: string): JwtPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  } catch {
+    return null;
   }
-  return false;
 }
 
 function getTokenFromRequest(request: NextRequest): string | null {
-  const cookie = request.cookies.get("webmux_token");
+  const cookie = request.cookies.get(COOKIE_NAME);
   if (cookie) return cookie.value;
   const auth = request.headers.get("authorization") || "";
   if (auth.startsWith("Bearer ")) return auth.slice(7);
   return null;
 }
 
+// ─── Public API ────────────────────────────────────────────────────
+
 export function requireAuth(request: NextRequest): boolean {
-  if (!AUTH_PASSWORD) return true;
   const token = getTokenFromRequest(request);
   if (!token) return false;
-  try {
-    return verifyToken(token);
-  } catch {
-    return false;
-  }
+  return verifyToken(token) !== null;
 }
 
-export function login(password: string): string | null {
-  if (!AUTH_PASSWORD) return generateToken();
-  if (
-    password.length === AUTH_PASSWORD.length &&
-    crypto.timingSafeEqual(Buffer.from(password), Buffer.from(AUTH_PASSWORD))
-  ) {
-    return generateToken();
+export async function login(
+  email: string,
+  password: string
+): Promise<string | null> {
+  const user = await prisma.user
+    .findUnique({ where: { email: email.toLowerCase().trim() } })
+    .catch(() => null);
+  if (!user) return null;
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return null;
+  return generateToken(user);
+}
+
+export async function register(
+  email: string,
+  password: string,
+  name?: string
+): Promise<{ token: string } | { error: string }> {
+  const normalized = email.toLowerCase().trim();
+  if (!normalized || !normalized.includes("@")) {
+    return { error: "Invalid email" };
   }
-  return null;
+  if (password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
+  const existing = await prisma.user
+    .findUnique({ where: { email: normalized } })
+    .catch(() => null);
+  if (existing) {
+    return { error: "Email already registered" };
+  }
+
+  const hash = await bcrypt.hash(password, 12);
+  const user = await prisma.user.create({
+    data: { email: normalized, password: hash, name: name || "" },
+  });
+
+  return { token: generateToken(user) };
 }
 
 export async function checkAuth(): Promise<{
   authenticated: boolean;
-  passwordRequired: boolean;
+  user: { email: string; name: string } | null;
+  hasUsers: boolean;
 }> {
-  if (!AUTH_PASSWORD) return { authenticated: true, passwordRequired: false };
+  const userCount = await prisma.user.count().catch(() => 0);
   const cookieStore = await cookies();
-  const token = cookieStore.get("webmux_token")?.value;
+  const token = cookieStore.get(COOKIE_NAME)?.value;
+
   if (token) {
-    try {
-      if (verifyToken(token))
-        return { authenticated: true, passwordRequired: true };
-    } catch {
-      /* invalid token length */
+    const payload = verifyToken(token);
+    if (payload) {
+      const user = await prisma.user
+        .findUnique({ where: { id: payload.userId }, select: { email: true, name: true } })
+        .catch(() => null);
+      if (user) {
+        return { authenticated: true, user, hasUsers: true };
+      }
     }
   }
-  return { authenticated: false, passwordRequired: true };
+
+  return { authenticated: false, user: null, hasUsers: userCount > 0 };
 }
 
-export { generateToken, verifyToken, AUTH_PASSWORD };
+export { COOKIE_NAME, JWT_SECRET };

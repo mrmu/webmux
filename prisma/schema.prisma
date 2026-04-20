@@ -7,6 +7,16 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // bcrypt hash
+  name      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("users")
+}
+
 model Project {
   id          Int      @id @default(autoincrement())
   name        String   @unique // tmux session name

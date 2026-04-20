@@ -6,7 +6,6 @@ import { Server as HttpServer, IncomingMessage } from "http";
 import { parse } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
-import crypto from "crypto";
 
 // ─── Validation ────────────────────────────────────────────────────
 
@@ -16,28 +15,20 @@ function isValidSessionName(name: string): boolean {
   return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
 }
 
-// ─── Auth ──────────────────────────────────────────────────────────
+// ─── Auth (JWT) ────────────────────────────────────────────────────
 
-const AUTH_PASSWORD = process.env.WEBMUX_PASSWORD || "";
-const AUTH_SECRET =
-  process.env.WEBMUX_SECRET || crypto.randomBytes(32).toString("hex");
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET =
+  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
 
 function verifyToken(token: string): boolean {
-  if (!AUTH_PASSWORD) return true;
-  const day = Math.floor(Date.now() / 86_400_000);
-  for (const offset of [0, 1]) {
-    const expected = crypto
-      .createHmac("sha256", AUTH_SECRET)
-      .update(String(day - offset))
-      .digest("hex");
-    try {
-      if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected)))
-        return true;
-    } catch {
-      continue;
-    }
+  try {
+    jwt.verify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 function getCookieValue(header: string | undefined, name: string): string | null {
@@ -82,7 +73,7 @@ export function setupWebSocket(server: HttpServer) {
 
       // Auth check
       const token = getCookieValue(request.headers.cookie, "webmux_token");
-      if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
+      if (!token || !verifyToken(token)) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;

@@ -8,29 +8,28 @@ import Workspace from "@/components/Workspace";
 
 type Screen =
   | { type: "loading" }
-  | { type: "login" }
+  | { type: "login"; isFirstUser: boolean }
   | { type: "list" }
   | { type: "workspace"; session: string; sessions: SessionInfo[] };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ type: "loading" });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const auth = await api.get("/api/auth/check");
-        if (auth.authenticated) {
-          setScreen({ type: "list" });
-        } else if (auth.password_required) {
-          setScreen({ type: "login" });
-        } else {
-          await api.post("/api/auth/login", {});
-          setScreen({ type: "list" });
-        }
-      } catch {
-        setScreen({ type: "login" });
+  const checkAuth = async () => {
+    try {
+      const auth = await api.get("/api/auth/check");
+      if (auth.authenticated) {
+        setScreen({ type: "list" });
+      } else {
+        setScreen({ type: "login", isFirstUser: !auth.hasUsers });
       }
-    })();
+    } catch {
+      setScreen({ type: "login", isFirstUser: false });
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
   }, []);
 
   if (screen.type === "loading") {
@@ -45,7 +44,12 @@ export default function Home() {
   }
 
   if (screen.type === "login") {
-    return <LoginScreen onSuccess={() => setScreen({ type: "list" })} />;
+    return (
+      <LoginScreen
+        onSuccess={() => setScreen({ type: "list" })}
+        isFirstUser={screen.isFirstUser}
+      />
+    );
   }
 
   if (screen.type === "list") {

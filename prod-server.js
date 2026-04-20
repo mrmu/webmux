@@ -5,7 +5,7 @@
 const http = require("http");
 const path = require("path");
 const { parse } = require("url");
-const crypto = require("crypto");
+// crypto removed — using JWT now
 
 const dir = path.join(__dirname);
 process.env.NODE_ENV = "production";
@@ -21,26 +21,17 @@ process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 // ─── Auth ──────────────────────────────────────────────────────────
 
-const AUTH_PASSWORD = process.env.WEBMUX_PASSWORD || "";
-const AUTH_SECRET =
-  process.env.WEBMUX_SECRET || crypto.randomBytes(32).toString("hex");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET =
+  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
 
 function verifyToken(token) {
-  if (!AUTH_PASSWORD) return true;
-  const day = Math.floor(Date.now() / 86400000);
-  for (const offset of [0, 1]) {
-    const expected = crypto
-      .createHmac("sha256", AUTH_SECRET)
-      .update(String(day - offset))
-      .digest("hex");
-    try {
-      if (crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected)))
-        return true;
-    } catch {
-      continue;
-    }
+  try {
+    jwt.verify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 }
 
 function getCookieValue(header, name) {
@@ -136,7 +127,7 @@ async function main() {
 
       // Auth check
       const token = getCookieValue(request.headers.cookie, "webmux_token");
-      if (AUTH_PASSWORD && (!token || !verifyToken(token))) {
+      if (!token || !verifyToken(token)) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
         return;
