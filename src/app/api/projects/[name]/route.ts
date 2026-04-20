@@ -39,6 +39,8 @@ export async function PUT(
       ...(body.color && { color: body.color }),
       ...(body.cwd !== undefined && { cwd: body.cwd }),
       ...(body.command !== undefined && { command: body.command }),
+      ...(body.repo_url !== undefined && { repoUrl: body.repo_url }),
+      ...(body.repo_token !== undefined && { repoToken: body.repo_token }),
     },
     create: {
       name,
@@ -47,6 +49,8 @@ export async function PUT(
       color: body.color || "#6366f1",
       cwd: body.cwd || "",
       command: body.command || "",
+      repoUrl: body.repo_url || "",
+      repoToken: body.repo_token || "",
     },
   });
 

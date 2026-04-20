@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       color: p.color,
       cwd: p.cwd,
       command: p.command,
+      repo_url: p.repoUrl,
+      repo_token: p.repoToken ? "***" : "", // mask token in list
       created: live?.created || "",
       attached: live?.attached || false,
       width: live?.width || 0,
@@ -52,6 +54,8 @@ export async function GET(request: NextRequest) {
         color: "#6366f1",
         cwd: "",
         command: "",
+        repo_url: "",
+        repo_token: "",
         created: s.created,
         attached: s.attached,
         width: s.width,

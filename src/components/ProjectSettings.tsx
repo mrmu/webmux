@@ -35,6 +35,8 @@ export default function ProjectSettings({
   const [displayName, setDisplayName] = useState("");
   const [color, setColor] = useState("#6366f1");
   const [cwd, setCwd] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [repoToken, setRepoToken] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Hosts
@@ -60,6 +62,9 @@ export default function ProjectSettings({
         setDisplayName(p.display_name);
         setColor(p.color);
         setCwd(p.cwd);
+        setRepoUrl(p.repo_url || "");
+        // Don't overwrite token placeholder — only set if empty
+        if (!p.repo_token) setRepoToken("");
       }
     } catch { /* ignore */ }
   }, [projectName]);
@@ -103,6 +108,9 @@ export default function ProjectSettings({
         display_name: displayName,
         color,
         cwd,
+        repo_url: repoUrl,
+        // Only send token if user typed a new one (not the masked "***")
+        ...(repoToken && repoToken !== "***" && { repo_token: repoToken }),
       });
     } catch { /* ignore */ }
     setSaving(false);
@@ -151,6 +159,14 @@ export default function ProjectSettings({
           <label>
             Working Directory
             <input type="text" value={cwd} onChange={(e) => setCwd(e.target.value)} />
+          </label>
+          <label>
+            Repository URL
+            <input type="url" placeholder="https://github.com/user/repo" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
+          </label>
+          <label>
+            Repository Token (PAT)
+            <input type="password" placeholder={repoToken ? "••••••" : "GitHub/Bitbucket personal access token"} value={repoToken === "***" ? "" : repoToken} onChange={(e) => setRepoToken(e.target.value)} />
           </label>
           <label>
             Color

@@ -20,26 +20,20 @@ export default function AccountPage({
   onLogout: () => void;
 }) {
   const [users, setUsers] = useState<User[]>([]);
-  // Change password
   const [currentPw, setCurrentPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [pwMsg, setPwMsg] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
-  // Add user
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [newUserPw, setNewUserPw] = useState("");
   const [addMsg, setAddMsg] = useState("");
-  // Settings
   const [projectsRoot, setProjectsRoot] = useState("");
   const [settingsMsg, setSettingsMsg] = useState("");
 
   const loadUsers = useCallback(async () => {
-    try {
-      setUsers(await api.get("/api/auth/users"));
-    } catch {
-      setUsers([]);
-    }
+    try { setUsers(await api.get("/api/auth/users")); }
+    catch { setUsers([]); }
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -49,23 +43,14 @@ export default function AccountPage({
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => {
-    loadUsers();
-    loadSettings();
-  }, [loadUsers, loadSettings]);
+  useEffect(() => { loadUsers(); loadSettings(); }, [loadUsers, loadSettings]);
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
-    setPwMsg("");
-    setPwSaving(true);
+    setPwMsg(""); setPwSaving(true);
     try {
-      await api.put("/api/auth/password", {
-        currentPassword: currentPw,
-        newPassword: newPw,
-      });
-      setPwMsg("Password updated");
-      setCurrentPw("");
-      setNewPw("");
+      await api.put("/api/auth/password", { currentPassword: currentPw, newPassword: newPw });
+      setPwMsg("Password updated"); setCurrentPw(""); setNewPw("");
     } catch (err) {
       const msg = (err as Error).message;
       try { setPwMsg(JSON.parse(msg).error); } catch { setPwMsg(msg); }
@@ -74,19 +59,11 @@ export default function AccountPage({
   };
 
   const addUser = async (e: FormEvent) => {
-    e.preventDefault();
-    setAddMsg("");
+    e.preventDefault(); setAddMsg("");
     try {
-      await api.post("/api/auth/users", {
-        email: newEmail,
-        password: newUserPw,
-        name: newName,
-      });
-      setNewEmail("");
-      setNewName("");
-      setNewUserPw("");
-      setAddMsg("User created");
-      loadUsers();
+      await api.post("/api/auth/users", { email: newEmail, password: newUserPw, name: newName });
+      setNewEmail(""); setNewName(""); setNewUserPw("");
+      setAddMsg("User created"); loadUsers();
     } catch (err) {
       const msg = (err as Error).message;
       try { setAddMsg(JSON.parse(msg).error); } catch { setAddMsg(msg); }
@@ -95,12 +72,16 @@ export default function AccountPage({
 
   const deleteUser = async (id: number, email: string) => {
     if (!confirm(`Delete user ${email}?`)) return;
+    try { await api.del(`/api/auth/users/${id}`); loadUsers(); }
+    catch (err) { alert((err as Error).message); }
+  };
+
+  const saveSettings = async () => {
+    setSettingsMsg("");
     try {
-      await api.del(`/api/auth/users/${id}`);
-      loadUsers();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+      await api.put("/api/settings", { projectsRoot });
+      setSettingsMsg("Saved");
+    } catch { setSettingsMsg("Failed"); }
   };
 
   const logout = async () => {
@@ -113,54 +94,44 @@ export default function AccountPage({
       <header className="top-bar">
         <button className="icon-btn back-btn" onClick={onBack}>&larr;</button>
         <h1 className="top-title">Account</h1>
-        <button className="icon-btn" onClick={logout} title="Logout" style={{ fontSize: "0.9rem" }}>
-          Logout
-        </button>
+        <button className="logout-btn" onClick={logout}>Logout</button>
       </header>
 
       <div className="account-content">
-        {/* Projects Root */}
-        <section className="settings-section">
-          <h3>Projects Directory</h3>
-          <label>
-            Root path for all projects
-            <input type="text" value={projectsRoot}
-              onChange={(e) => setProjectsRoot(e.target.value)} />
-          </label>
-          <button className="btn-primary" onClick={async () => {
-            setSettingsMsg("");
-            try {
-              await api.put("/api/settings", { projectsRoot });
-              setSettingsMsg("Saved");
-            } catch { setSettingsMsg("Failed"); }
-          }} style={{ marginTop: "0.5rem", padding: "0.5rem 1.5rem" }}>
-            Save
-          </button>
-          {settingsMsg && <p className={`settings-hint ${settingsMsg === "Saved" ? "success-text" : "error-text"}`}>{settingsMsg}</p>}
+        {/* System Settings */}
+        <section className="account-section">
+          <h3>System</h3>
+          <div className="form-row">
+            <label>Projects Root</label>
+            <div className="form-input-group">
+              <input type="text" value={projectsRoot} onChange={(e) => setProjectsRoot(e.target.value)} />
+              <button className="btn-sm" onClick={saveSettings}>Save</button>
+            </div>
+            {settingsMsg && <p className={settingsMsg === "Saved" ? "msg-ok" : "msg-err"}>{settingsMsg}</p>}
+          </div>
         </section>
 
-        {/* Change Password */}
-        <section className="settings-section">
+        {/* Password */}
+        <section className="account-section">
           <h3>Change Password</h3>
           <form onSubmit={changePassword}>
-            <label>
-              Current Password
+            <div className="form-row">
+              <label>Current Password</label>
               <input type="password" value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} required />
-            </label>
-            <label>
-              New Password
-              <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={6} />
-            </label>
-            <button className="btn-primary" type="submit" disabled={pwSaving}
-              style={{ marginTop: "0.5rem", padding: "0.5rem 1.5rem" }}>
-              {pwSaving ? "Saving..." : "Update Password"}
-            </button>
-            {pwMsg && <p className={`settings-hint ${pwMsg.includes("updated") ? "success-text" : "error-text"}`}>{pwMsg}</p>}
+            </div>
+            <div className="form-row">
+              <label>New Password</label>
+              <div className="form-input-group">
+                <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} required minLength={6} />
+                <button className="btn-sm" type="submit" disabled={pwSaving}>{pwSaving ? "..." : "Update"}</button>
+              </div>
+              {pwMsg && <p className={pwMsg.includes("updated") ? "msg-ok" : "msg-err"}>{pwMsg}</p>}
+            </div>
           </form>
         </section>
 
-        {/* User Management */}
-        <section className="settings-section">
+        {/* Users */}
+        <section className="account-section">
           <h3>Users</h3>
           <div className="user-list">
             {users.map((u) => (
@@ -169,37 +140,23 @@ export default function AccountPage({
                   <span className="user-email">{u.email}</span>
                   {u.name && <span className="user-name">{u.name}</span>}
                 </div>
-                {u.email === currentEmail ? (
-                  <span className="user-badge">you</span>
-                ) : (
-                  <button className="host-delete" onClick={() => deleteUser(u.id, u.email)}>&times;</button>
-                )}
+                {u.email === currentEmail
+                  ? <span className="user-badge">you</span>
+                  : <button className="user-del" onClick={() => deleteUser(u.id, u.email)}>&times;</button>
+                }
               </div>
             ))}
           </div>
-        </section>
 
-        {/* Add User */}
-        <section className="settings-section">
-          <h3>Add User</h3>
-          <form onSubmit={addUser}>
-            <label>
-              Email
-              <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
-            </label>
-            <label>
-              Name
-              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            </label>
-            <label>
-              Password
-              <input type="password" value={newUserPw} onChange={(e) => setNewUserPw(e.target.value)} required minLength={6} />
-            </label>
-            <button className="btn-primary" type="submit"
-              style={{ marginTop: "0.5rem", padding: "0.5rem 1.5rem" }}>
-              Add User
-            </button>
-            {addMsg && <p className={`settings-hint ${addMsg.includes("created") ? "success-text" : "error-text"}`}>{addMsg}</p>}
+          <h3 style={{ marginTop: "1rem" }}>Add User</h3>
+          <form onSubmit={addUser} className="add-user-form">
+            <div className="form-row-inline">
+              <input type="email" placeholder="Email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
+              <input type="text" placeholder="Name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              <input type="password" placeholder="Password" value={newUserPw} onChange={(e) => setNewUserPw(e.target.value)} required minLength={6} />
+              <button className="btn-sm" type="submit">Add</button>
+            </div>
+            {addMsg && <p className={addMsg.includes("created") ? "msg-ok" : "msg-err"}>{addMsg}</p>}
           </form>
         </section>
       </div>
