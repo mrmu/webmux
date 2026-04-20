@@ -44,6 +44,14 @@ export default function ProjectSettings({
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
 
+  // CLAUDE.md status
+  const [claudeMd, setClaudeMd] = useState<{
+    exists: boolean;
+    hasDeploy: boolean;
+    deploySections: { title: string; body: string }[];
+    allSections: string[];
+  } | null>(null);
+
   const loadProject = useCallback(async () => {
     try {
       const sessions = await api.get("/api/sessions");
@@ -75,11 +83,18 @@ export default function ProjectSettings({
     } catch { setChatSessions([]); }
   }, [projectName]);
 
+  const loadClaudeMd = useCallback(async () => {
+    try {
+      setClaudeMd(await api.get(`/api/sessions/${projectName}/claudemd`));
+    } catch { setClaudeMd(null); }
+  }, [projectName]);
+
   useEffect(() => {
     loadProject();
     loadHosts();
     loadChatSessions();
-  }, [loadProject, loadHosts, loadChatSessions]);
+    loadClaudeMd();
+  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd]);
 
   const saveProject = async () => {
     setSaving(true);
@@ -185,6 +200,41 @@ export default function ProjectSettings({
             <button className="btn-primary" onClick={addHost}
               style={{ flex: "none", padding: "0.4rem 0.8rem" }}>Add</button>
           </div>
+        </section>
+
+        {/* CLAUDE.md Status */}
+        <section className="settings-section">
+          <h3>CLAUDE.md</h3>
+          {!claudeMd ? (
+            <p className="settings-hint">Loading...</p>
+          ) : !claudeMd.exists ? (
+            <div className="claudemd-status missing">
+              <span className="claudemd-icon">&#x26A0;</span>
+              <span>No CLAUDE.md found in project directory</span>
+            </div>
+          ) : (
+            <>
+              <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
+                <span className="claudemd-icon">{claudeMd.hasDeploy ? "&#x2705;" : "&#x26A0;"}</span>
+                <span>
+                  {claudeMd.hasDeploy
+                    ? "Deploy instructions found"
+                    : "No deploy instructions detected"}
+                </span>
+              </div>
+              {claudeMd.allSections.length > 0 && (
+                <p className="settings-hint">
+                  Sections: {claudeMd.allSections.join(", ")}
+                </p>
+              )}
+              {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
+                <details key={i} className="claudemd-deploy-section">
+                  <summary>{s.title}</summary>
+                  <pre>{s.body}</pre>
+                </details>
+              ))}
+            </>
+          )}
         </section>
 
         {/* Chat Session */}
