@@ -15,7 +15,9 @@ export default function FileEditor({
   const [content, setContent] = useState("");
   const [originalContent, setOriginalContent] = useState("");
   const [loading, setLoading] = useState(true);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const onModifiedRef = useRef(onModifiedChange);
+  onModifiedRef.current = onModifiedChange;
+  const prevModifiedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -34,9 +36,13 @@ export default function FileEditor({
 
   const modified = content !== originalContent;
 
+  // Only notify parent when modified state actually changes
   useEffect(() => {
-    onModifiedChange(modified);
-  }, [modified, onModifiedChange]);
+    if (modified !== prevModifiedRef.current) {
+      prevModifiedRef.current = modified;
+      onModifiedRef.current(modified);
+    }
+  }, [modified]);
 
   const save = useCallback(async () => {
     try {
@@ -83,7 +89,6 @@ export default function FileEditor({
       </div>
       <div className="editor-container">
         <textarea
-          ref={textareaRef}
           className="editor-fallback"
           value={content}
           spellCheck={false}
