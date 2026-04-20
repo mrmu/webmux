@@ -51,11 +51,13 @@ export default function ChatView({
   const [input, setInput] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const lastHashRef = useRef("");
-
   const pollingRef = useRef(false);
+  const userSelectingRef = useRef(false);
 
   const refreshChat = useCallback(async () => {
-    if (pollingRef.current) return; // skip if previous poll still running
+    if (pollingRef.current) return;
+    // Don't update DOM while user is selecting text
+    if (userSelectingRef.current) return;
     pollingRef.current = true;
     try {
       const controller = new AbortController();
@@ -74,6 +76,8 @@ export default function ChatView({
         ":" +
         (msgs[msgs.length - 1]?.result || "");
       if (hash === lastHashRef.current) return;
+      // Double-check selection hasn't started during fetch
+      if (userSelectingRef.current) return;
       lastHashRef.current = hash;
       setMessages(msgs);
     } catch {
@@ -88,6 +92,23 @@ export default function ChatView({
     const interval = setInterval(refreshChat, 2000);
     return () => clearInterval(interval);
   }, [refreshChat]);
+
+  // Pause updates while user is selecting text
+  useEffect(() => {
+    const onSelectStart = () => { userSelectingRef.current = true; };
+    const onMouseUp = () => {
+      // Small delay so the copy action can complete
+      setTimeout(() => { userSelectingRef.current = false; }, 500);
+    };
+    const el = messagesRef.current;
+    if (!el) return;
+    el.addEventListener("selectstart", onSelectStart);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      el.removeEventListener("selectstart", onSelectStart);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     const el = messagesRef.current;
