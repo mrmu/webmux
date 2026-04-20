@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npx tsx server.ts",
+    "dev": "npx tsx ws-dev-server.ts & NEXT_PUBLIC_WS_PORT=3001 npx next dev",
     "build": "npx prisma generate && next build",
     "start": "NODE_ENV=production npx tsx server.ts",
     "lint": "eslint",

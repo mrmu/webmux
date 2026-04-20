@@ -64,9 +64,8 @@ export function setupWebSocket(server: HttpServer) {
         const windowIndex = parts[1] !== undefined ? parseInt(parts[1]) : undefined;
         handleTerminalConnection(ws, sessionName, windowIndex);
       });
-    } else {
-      socket.destroy();
     }
+    // Don't destroy other upgrades — let Next.js handle HMR WebSocket
   });
 }
 

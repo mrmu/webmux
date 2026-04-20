@@ -67,9 +67,14 @@ export default function TerminalView({
       setTimeout(() => fitAddon.fit(), 50);
 
       // Connect WebSocket with window index
+      // Dev: terminal WS on separate port (3001); Prod: same host
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT;
+      const wsHost = wsPort
+        ? `${location.hostname}:${wsPort}`
+        : location.host;
       const ws = new WebSocket(
-        `${proto}//${location.host}/ws/terminal/${sessionName}/${activeWindow}`
+        `${proto}//${wsHost}/ws/terminal/${sessionName}/${activeWindow}`
       );
 
       ws.onopen = () => {
