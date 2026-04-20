@@ -23,8 +23,15 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Only tmux client needed — connects to host tmux server via socket
-RUN apk add --no-cache openssl tmux
+# tmux + build tools for node-pty native compile
+RUN apk add --no-cache openssl tmux python3 make g++
+
+# Install prod-server runtime deps (ws, node-pty, jsonwebtoken)
+RUN npm init -y > /dev/null 2>&1 && \
+    npm install --omit=dev ws node-pty@1.0.0 jsonwebtoken 2>/dev/null | tail -1
+
+# Remove build tools after native compile
+RUN apk del python3 make g++ 2>/dev/null || true
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
@@ -37,10 +44,8 @@ COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/pg ./node_modules/pg
 
-# Custom production server with WebSocket + PTY
+# Custom production server
 COPY --from=builder /app/prod-server.js ./server.js
-COPY --from=builder /app/node_modules/ws ./node_modules/ws
-COPY --from=builder /app/node_modules/node-pty ./node_modules/node-pty
 
 EXPOSE 3000
 ENV PORT=3000
