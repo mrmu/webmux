@@ -845,19 +845,20 @@ html, body {
 }
 .tab-close:hover { opacity: 1; color: var(--danger); }
 
-.view-bar-btn {
-  width: 38px; height: auto; font-size: 0.85rem; font-weight: 700;
+/* Action buttons (settings, notes, files) */
+.view-bar-actions {
+  display: flex; align-items: stretch;
   border-left: 1px solid rgba(255,255,255,0.06);
 }
-
-.files-btn {
-  flex-shrink: 0; padding: 0.4rem 0.8rem; border: none;
-  border-left: 1px solid rgba(255,255,255,0.06);
-  background: transparent; color: var(--text-dim);
-  font-size: 0.82rem; font-weight: 600; cursor: pointer;
-  transition: color 0.2s, background 0.2s;
+.view-action-btn {
+  width: 38px; display: flex; align-items: center; justify-content: center;
+  border: none; background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: color 0.2s, background 0.2s;
+  position: relative;
 }
-.files-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.view-action-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.view-action-btn.active { color: var(--accent); background: rgba(99,102,241,0.1); }
+.view-action-btn svg { flex-shrink: 0; }
 
 /* ─── Workspace Content ──────────── */
 .workspace-content {
