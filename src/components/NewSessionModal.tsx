@@ -18,7 +18,7 @@ export default function NewSessionModal({
   const [name, setName] = useState("");
   const [display, setDisplay] = useState("");
   const [cwd, setCwd] = useState("");
-  const [command, setCommand] = useState("claude --dangerously-skip-permissions");
+  const [command, setCommand] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
   const handleSubmit = async (e: FormEvent) => {

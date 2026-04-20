@@ -113,7 +113,9 @@ export default function ChatView({
   const restartClaude = async () => {
     setRestarting(true);
     try {
-      await api.post(`/api/sessions/${sessionName}/send`, { text: "claude" });
+      await api.post(`/api/sessions/${sessionName}/send`, {
+        text: "claude --dangerously-skip-permissions",
+      });
       // Give it time to start, then refresh UI state
       setTimeout(() => {
         refreshChat();

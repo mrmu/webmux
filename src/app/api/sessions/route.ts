@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
   const name = (body.name || "").trim();
   const projectsRoot = process.env.PROJECTS_ROOT || "/Users/audilu/next";
   const cwd = body.cwd || `${projectsRoot}/${name}`;
-  const command = body.command || "claude --dangerously-skip-permissions";
+  const command = body.command || undefined;
   const displayName = body.display_name || name;
   const color = body.color || "#6366f1";
 

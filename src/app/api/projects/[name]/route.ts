@@ -18,12 +18,16 @@ export async function PUT(
       ...(body.display_name && { displayName: body.display_name }),
       ...(body.description !== undefined && { description: body.description }),
       ...(body.color && { color: body.color }),
+      ...(body.cwd !== undefined && { cwd: body.cwd }),
+      ...(body.command !== undefined && { command: body.command }),
     },
     create: {
       name,
       displayName: body.display_name || name,
       description: body.description || "",
       color: body.color || "#6366f1",
+      cwd: body.cwd || "",
+      command: body.command || "",
     },
   });
 
