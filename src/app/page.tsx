@@ -5,20 +5,24 @@ import { api } from "@/lib/api";
 import LoginScreen from "@/components/LoginScreen";
 import SessionList, { type SessionInfo } from "@/components/SessionList";
 import Workspace from "@/components/Workspace";
+import AccountPage from "@/components/AccountPage";
 
 type Screen =
   | { type: "loading" }
   | { type: "login"; isFirstUser: boolean }
   | { type: "list" }
-  | { type: "workspace"; session: string; sessions: SessionInfo[] };
+  | { type: "workspace"; session: string; sessions: SessionInfo[] }
+  | { type: "account" };
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>({ type: "loading" });
+  const [userEmail, setUserEmail] = useState("");
 
   const checkAuth = async () => {
     try {
       const auth = await api.get("/api/auth/check");
       if (auth.authenticated) {
+        setUserEmail(auth.user?.email || "");
         setScreen({ type: "list" });
       } else {
         setScreen({ type: "login", isFirstUser: !auth.hasUsers });
@@ -46,8 +50,21 @@ export default function Home() {
   if (screen.type === "login") {
     return (
       <LoginScreen
-        onSuccess={() => setScreen({ type: "list" })}
+        onSuccess={checkAuth}
         isFirstUser={screen.isFirstUser}
+      />
+    );
+  }
+
+  if (screen.type === "account") {
+    return (
+      <AccountPage
+        currentEmail={userEmail}
+        onBack={() => setScreen({ type: "list" })}
+        onLogout={() => {
+          setUserEmail("");
+          setScreen({ type: "login", isFirstUser: false });
+        }}
       />
     );
   }
@@ -58,6 +75,7 @@ export default function Home() {
         onOpenWorkspace={(name, sessions) =>
           setScreen({ type: "workspace", session: name, sessions })
         }
+        onOpenAccount={() => setScreen({ type: "account" })}
       />
     );
   }
