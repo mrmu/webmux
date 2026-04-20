@@ -15,9 +15,11 @@ export default function NewSessionModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const projectsRoot = "/Users/audilu/next";
   const [name, setName] = useState("");
   const [display, setDisplay] = useState("");
-  const [cwd, setCwd] = useState("");
+  const [cwd, setCwd] = useState(projectsRoot + "/");
+  const [cwdManual, setCwdManual] = useState(false);
   const [command, setCommand] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
@@ -53,7 +55,9 @@ export default function NewSessionModal({
               onChange={(e) => {
                 const v = e.target.value;
                 setName(v);
-                // Don't auto-fill — server defaults to PROJECTS_ROOT/{name}
+                if (!cwdManual) {
+                  setCwd(v ? `${projectsRoot}/${v}` : `${projectsRoot}/`);
+                }
               }}
             />
           </label>
@@ -70,9 +74,12 @@ export default function NewSessionModal({
             Working Directory
             <input
               type="text"
-              placeholder="auto: {PROJECTS_ROOT}/{name}"
+              placeholder="/Users/audilu/next/my-project"
               value={cwd}
-              onChange={(e) => setCwd(e.target.value)}
+              onChange={(e) => {
+                setCwd(e.target.value);
+                setCwdManual(true);
+              }}
             />
           </label>
           <label>
