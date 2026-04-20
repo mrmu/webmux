@@ -122,7 +122,19 @@ export default function ChatView({
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
 
-  // SSE: subscribe to file-watch-based stream
+  // Instant initial load via fetch
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`/api/sessions/${sessionName}/chat`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.messages?.length) setMessages(data.messages);
+      } catch { /* SSE will pick up */ }
+    })();
+  }, [sessionName]);
+
+  // SSE: live updates after initial load
   useEffect(() => {
     const eventSource = new EventSource(
       `/api/sessions/${sessionName}/chat-stream`
@@ -133,7 +145,6 @@ export default function ChatView({
         const data = JSON.parse(e.data);
         const msgs: ChatMessage[] = data.messages || [];
         if (userSelectingRef.current) {
-          // Buffer update until user finishes selecting
           pendingUpdateRef.current = msgs;
         } else {
           setMessages(msgs);
