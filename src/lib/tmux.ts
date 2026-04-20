@@ -199,6 +199,18 @@ export async function killWindow(
   await runTmux("kill-window", "-t", `${sessionName}:${windowIndex}`);
 }
 
+/** Lines to filter from Claude Code terminal output. */
+function isTerminalChrome(line: string): boolean {
+  const s = line.trim();
+  // Separator lines (─────)
+  if (s.length >= 5 && /^[─━─-]{5,}$/.test(s)) return true;
+  // Status bar / tmux chrome
+  if (s.includes("bypass permissions") || s.includes("shift+tab to cycle")) return true;
+  if (s.includes("tmux focus-events") || s.includes("focus tracking")) return true;
+  if (s.includes("⏵") && s.includes("permissions")) return true;
+  return false;
+}
+
 /** Parse Claude Code terminal output into conversation messages (fallback). */
 export function parseClaudeConversation(
   rawText: string
@@ -214,6 +226,7 @@ export function parseClaudeConversation(
     const stripped = line.trim();
 
     if (!stripped && !currentRole) continue;
+    if (isTerminalChrome(line)) continue;
 
     const humanMatch = stripped.match(humanPromptRe);
     if (humanMatch) {
