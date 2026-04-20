@@ -1,14 +1,13 @@
 # Production overrides (Linux)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
-# Container runs as the SAME UID as the host dev user, so tmux in the
-# container connects to the host's tmux server via mounted socket.
-# Claude Code runs on the HOST — never installed in the container.
+# Prerequisites on host:
+#   - tmux installed
+#   - Claude Code installed and authenticated
+#   - Dev user created (see docs/deploy/setup.md)
 #
 # Required .env vars:
-#   HOST_UID=1002       (id -u of the host dev user)
-#   HOST_GID=1003       (id -g of the host dev user)
-#   HOST_USER_HOME=/home/devops_bot
+#   HOST_UID, HOST_GID, HOST_USER_HOME
 services:
   app:
     user: "${HOST_UID}:${HOST_GID}"
@@ -20,7 +19,7 @@ services:
       PROJECTS_ROOT: ${HOST_USER_HOME:-/home/devops_bot}
       HOME: ${HOST_USER_HOME:-/home/devops_bot}
     volumes:
-      # Host tmux socket
+      # Host tmux socket — container tmux connects to host tmux server
       - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
-      # Host home directory
+      # Host home — projects, claude config, ssh keys
       - ${HOST_USER_HOME:-/home/devops_bot}:${HOST_USER_HOME:-/home/devops_bot}:rw

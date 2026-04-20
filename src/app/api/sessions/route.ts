@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const name = (body.name || "").trim();
-  const projectsRoot = process.env.PROJECTS_ROOT || "/Users/audilu/next";
+  const projectsRoot = process.env.PROJECTS_ROOT || `${process.env.HOME || "/Users/audilu"}/next`;
   const cwd = body.cwd || `${projectsRoot}/${name}`;
   const command = body.command || undefined;
   const displayName = body.display_name || name;

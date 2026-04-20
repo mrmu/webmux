@@ -1,15 +1,7 @@
-# Local development overrides — auto-loaded by `docker compose up`
-# macOS: tmux + Claude Code run inside container
+# Local development overrides
+# DB port exposed for `npm run dev` on host
+# App container not used locally — run `npm run dev` directly
 services:
-  app:
-    environment:
-      VIRTUAL_HOST: webmux.test
-      VIRTUAL_PORT: "3000"
-      PROJECTS_ROOT: /projects
-      # Claude Code Max Plan — login once in container, token persists
-      # in the dedicated ~/.claude-webmux volume across rebuilds
-    volumes:
-      # Mount host projects
-      - ${HOME:-/Users/audilu}/next:/projects:rw
-      # Dedicated Claude config for container (separate from host's)
-      - ${HOME:-/Users/audilu}/.claude-webmux:/home/nextjs/.claude:rw
+  db:
+    ports:
+      - "5432:5432"

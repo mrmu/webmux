@@ -129,12 +129,23 @@ tmux attach -t <project-name>
 
 ## macOS 本機開發
 
-macOS Docker Desktop 不支援 Unix socket mount，所以本機開發時 tmux + Claude Code 跑在容器裡：
+本機不走 Docker，直接跑 Next.js dev server：
 
 ```bash
-# 直接 docker compose up（自動載入 override）
-docker compose up -d --build
+cd ~/next/webmux
 
-# 第一次需要在容器 terminal 裡完成 Claude OAuth 登入
-# 之後 token 存在 ~/.claude volume，rebuild 不會消失
+# 確保宿主機有 tmux 和 Claude Code
+brew install tmux
+npm install -g @anthropic-ai/claude-code
+
+# 啟動 dev server（直接用宿主機 tmux + claude）
+npm run dev
+
+# 開啟 http://webmux.test
+```
+
+需要 PostgreSQL（可用 Docker 單獨跑或本機安裝）：
+```bash
+# 只啟動 DB
+docker compose up -d db
 ```
