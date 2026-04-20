@@ -50,55 +50,50 @@ export default function ChatView({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
-  const lastHashRef = useRef("");
-  const pollingRef = useRef(false);
   const userSelectingRef = useRef(false);
+  const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
 
-  const refreshChat = useCallback(async () => {
-    if (pollingRef.current) return;
-    // Don't update DOM while user is selecting text
-    if (userSelectingRef.current) return;
-    pollingRef.current = true;
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`/api/sessions/${sessionName}/chat`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      if (!res.ok) return;
-      const data = await res.json();
-      const msgs: ChatMessage[] = data.messages || [];
-      const hash =
-        msgs.length +
-        ":" +
-        (msgs[msgs.length - 1]?.text || "").length +
-        ":" +
-        (msgs[msgs.length - 1]?.result || "");
-      if (hash === lastHashRef.current) return;
-      // Double-check selection hasn't started during fetch
-      if (userSelectingRef.current) return;
-      lastHashRef.current = hash;
-      setMessages(msgs);
-    } catch {
-      /* timeout or network error — will retry next tick */
-    } finally {
-      pollingRef.current = false;
-    }
+  // SSE: subscribe to file-watch-based stream
+  useEffect(() => {
+    const eventSource = new EventSource(
+      `/api/sessions/${sessionName}/chat-stream`
+    );
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        const msgs: ChatMessage[] = data.messages || [];
+        if (userSelectingRef.current) {
+          // Buffer update until user finishes selecting
+          pendingUpdateRef.current = msgs;
+        } else {
+          setMessages(msgs);
+        }
+      } catch {
+        /* ignore parse errors */
+      }
+    };
+
+    eventSource.onerror = () => {
+      // SSE will auto-reconnect
+    };
+
+    return () => eventSource.close();
   }, [sessionName]);
 
+  // Flush buffered update after selection ends
   useEffect(() => {
-    refreshChat();
-    const interval = setInterval(refreshChat, 2000);
-    return () => clearInterval(interval);
-  }, [refreshChat]);
-
-  // Pause updates while user is selecting text
-  useEffect(() => {
-    const onSelectStart = () => { userSelectingRef.current = true; };
+    const onSelectStart = () => {
+      userSelectingRef.current = true;
+    };
     const onMouseUp = () => {
-      // Small delay so the copy action can complete
-      setTimeout(() => { userSelectingRef.current = false; }, 500);
+      setTimeout(() => {
+        userSelectingRef.current = false;
+        if (pendingUpdateRef.current) {
+          setMessages(pendingUpdateRef.current);
+          pendingUpdateRef.current = null;
+        }
+      }, 300);
     };
     const el = messagesRef.current;
     if (!el) return;
@@ -123,7 +118,6 @@ export default function ChatView({
     setInput("");
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
-      setTimeout(refreshChat, 300);
     } catch (e) {
       alert("Failed to send: " + (e as Error).message);
     }
@@ -132,7 +126,6 @@ export default function ChatView({
   const sendSpecial = async (key: string) => {
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { special_key: key });
-      setTimeout(refreshChat, 300);
     } catch {
       /* ignore */
     }
@@ -141,7 +134,6 @@ export default function ChatView({
   const sendText = async (text: string) => {
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
-      setTimeout(refreshChat, 300);
     } catch {
       /* ignore */
     }
@@ -155,11 +147,7 @@ export default function ChatView({
       await api.post(`/api/sessions/${sessionName}/send`, {
         text: "claude --dangerously-skip-permissions",
       });
-      // Give it time to start, then refresh UI state
-      setTimeout(() => {
-        refreshChat();
-        setRestarting(false);
-      }, 3000);
+      setTimeout(() => setRestarting(false), 3000);
     } catch {
       setRestarting(false);
     }
@@ -295,7 +283,7 @@ export default function ChatView({
             <button className="nav-btn" onClick={() => sendSpecial("Escape")}>
               &#x238B; Esc
             </button>
-            <button className="nav-btn" onClick={refreshChat}>
+            <button className="nav-btn" onClick={() => { const el = messagesRef.current; if (el) el.scrollTop = el.scrollHeight; }}>
               &#x1F504;
             </button>
             <button className="nav-btn" onClick={() => sendSpecial("Enter")}>
@@ -362,7 +350,7 @@ export default function ChatView({
             </button>
             <button
               className="shortcut-btn"
-              onClick={refreshChat}
+              onClick={() => { const el = messagesRef.current; if (el) el.scrollTop = el.scrollHeight; }}
               title="Refresh"
             >
               &#x27F3;
