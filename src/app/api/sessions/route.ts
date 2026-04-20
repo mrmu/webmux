@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const liveNames = new Set(liveSessions.map((s) => s.name));
 
   // Get all projects from DB
-  const projects = await prisma.project.findMany();
+  const projects = await prisma.project.findMany({ include: { hosts: true } });
 
   // Merge: show live sessions with DB metadata, plus DB-only projects as "stopped"
   const result = projects.map((p) => {
@@ -30,6 +30,13 @@ export async function GET(request: NextRequest) {
       height: live?.height || 0,
       activity: live?.activity || "",
       running: liveNames.has(p.name),
+      hosts: p.hosts.map((h) => ({
+        id: h.id,
+        name: h.name,
+        ssh_target: h.sshTarget,
+        env: h.env,
+        description: h.description,
+      })),
     };
   });
 
@@ -49,6 +56,7 @@ export async function GET(request: NextRequest) {
         height: s.height,
         activity: s.activity,
         running: true,
+        hosts: [],
       });
     }
   }

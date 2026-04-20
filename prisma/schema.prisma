@@ -18,8 +18,23 @@ model Project {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   notes       Note[]
+  hosts       Host[]
 
   @@map("projects")
+}
+
+model Host {
+  id          Int      @id @default(autoincrement())
+  projectName String   @map("project_name")
+  name        String   // display name, e.g. "GCP Prod"
+  sshTarget   String   @map("ssh_target") // e.g. "gcp-prod" (Tailscale machine name)
+  env         String   @default("production") // production, staging, development
+  description String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  project     Project  @relation(fields: [projectName], references: [name], onDelete: Cascade)
+
+  @@map("hosts")
 }
 
 model Note {
