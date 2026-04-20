@@ -18,7 +18,8 @@ export async function GET(
   const { name } = await params;
   const content = await tmux.capturePane(name);
   const paneCmd = await tmux.getPaneCommand(name);
-  const processIdle = paneCmd ? SHELL_NAMES.has(paneCmd.toLowerCase()) : false;
+  // idle = no process, or process is a shell (not claude)
+  const processIdle = !paneCmd || SHELL_NAMES.has(paneCmd.toLowerCase());
 
   const result: Record<string, unknown> = {
     interactive: false,

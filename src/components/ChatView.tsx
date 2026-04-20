@@ -195,11 +195,15 @@ export default function ChatView({
   const sendMessage = async () => {
     const text = input.trim();
     if (!text) return;
+    if (uiState?.idle) {
+      alert("Please start Claude Code first (click the button above)");
+      return;
+    }
     setInput("");
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
-    } catch (e) {
-      alert("Failed to send: " + (e as Error).message);
+    } catch {
+      alert("Failed to send. Is Claude Code running? Check the Terminal tab.");
     }
   };
 
@@ -237,18 +241,16 @@ export default function ChatView({
     <div className="view-panel chat-view">
       <MessageList messages={messages} innerRef={messagesRef} />
 
-      {/* Idle Banner */}
+      {/* Idle Banner — shown when no Claude Code is running */}
       {uiState?.idle && (
         <div className="idle-banner">
-          <span className="idle-text">
-            {uiState.process || "shell"} is idle
-          </span>
+          <span className="idle-text">Claude Code is not running</span>
           <button
             className="idle-restart-btn"
             onClick={restartClaude}
             disabled={restarting}
           >
-            {restarting ? "Starting..." : "Start Claude"}
+            {restarting ? "Starting..." : "▶ Start Claude Code"}
           </button>
         </div>
       )}
