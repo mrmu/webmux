@@ -18,6 +18,8 @@ services:
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
       PROJECTS_ROOT: ${HOST_USER_HOME:-/home/devops_bot}
       HOME: ${HOST_USER_HOME:-/home/devops_bot}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+      CF_ZONE_ID: ${CF_ZONE_ID:-}
     volumes:
       # Host tmux socket — container tmux connects to host tmux server
       - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
