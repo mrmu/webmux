@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { api } from "@/lib/api";
 
 interface ChatMessage {
@@ -33,6 +33,75 @@ function renderMarkdown(text: string): string {
   );
   return html;
 }
+
+/** Memoized message list — only re-renders when messages array changes */
+const MessageList = memo(
+  function MessageList({
+    messages,
+    innerRef,
+  }: {
+    messages: ChatMessage[];
+    innerRef: React.RefObject<HTMLDivElement | null>;
+  }) {
+    return (
+      <div className="chat-messages" ref={innerRef}>
+        {messages.length === 0 ? (
+          <div className="empty-state">
+            <p>No conversation yet.<br />Send a prompt to get started.</p>
+          </div>
+        ) : (
+          messages.map((m, i) => {
+            const ct = m.content_type;
+            if (!ct) {
+              return <div key={i} className={`chat-bubble ${m.role}`}>{m.content}</div>;
+            }
+            if (ct === "text") {
+              if (m.role === "user") {
+                return (
+                  <div key={i} className="chat-bubble human">
+                    {m.text?.split("\n").map((line, j) => (
+                      <span key={j}>{line}{j < (m.text?.split("\n").length || 0) - 1 && <br />}</span>
+                    ))}
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="chat-bubble assistant"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text || "") }} />
+              );
+            }
+            if (ct === "tool") {
+              return (
+                <div key={i} className="chat-bubble tool">
+                  <div className="tool-summary">{m.text}</div>
+                  {m.result && (
+                    <div className={`tool-result-stats${m.is_error ? " tool-error" : ""}`}>{m.result}</div>
+                  )}
+                  {m.detail && (
+                    <details className="tool-detail">
+                      <summary>Show output</summary>
+                      <pre>{m.detail}</pre>
+                    </details>
+                  )}
+                </div>
+              );
+            }
+            if (ct === "thinking") {
+              return (
+                <div key={i} className="chat-bubble thinking">
+                  <details><summary>Thinking...</summary>
+                    <div className="thinking-content">{m.text}</div>
+                  </details>
+                </div>
+              );
+            }
+            return <div key={i} className={`chat-bubble ${m.role}`}>{m.text || m.content || ""}</div>;
+          })
+        )}
+      </div>
+    );
+  }
+);
 
 export default function ChatView({
   sessionName,
@@ -155,86 +224,7 @@ export default function ChatView({
 
   return (
     <div className="view-panel chat-view">
-      <div className="chat-messages" ref={messagesRef}>
-        {messages.length === 0 ? (
-          <div className="empty-state">
-            <p>
-              No conversation yet.
-              <br />
-              Send a prompt to get started.
-            </p>
-          </div>
-        ) : (
-          messages.map((m, i) => {
-            const ct = m.content_type;
-            if (!ct) {
-              return (
-                <div key={i} className={`chat-bubble ${m.role}`}>
-                  {m.content}
-                </div>
-              );
-            }
-            if (ct === "text") {
-              if (m.role === "user") {
-                return (
-                  <div key={i} className="chat-bubble human">
-                    {m.text?.split("\n").map((line, j) => (
-                      <span key={j}>
-                        {line}
-                        {j < (m.text?.split("\n").length || 0) - 1 && <br />}
-                      </span>
-                    ))}
-                  </div>
-                );
-              }
-              return (
-                <div
-                  key={i}
-                  className="chat-bubble assistant"
-                  dangerouslySetInnerHTML={{
-                    __html: renderMarkdown(m.text || ""),
-                  }}
-                />
-              );
-            }
-            if (ct === "tool") {
-              return (
-                <div key={i} className="chat-bubble tool">
-                  <div className="tool-summary">{m.text}</div>
-                  {m.result && (
-                    <div
-                      className={`tool-result-stats${m.is_error ? " tool-error" : ""}`}
-                    >
-                      {m.result}
-                    </div>
-                  )}
-                  {m.detail && (
-                    <details className="tool-detail">
-                      <summary>Show output</summary>
-                      <pre>{m.detail}</pre>
-                    </details>
-                  )}
-                </div>
-              );
-            }
-            if (ct === "thinking") {
-              return (
-                <div key={i} className="chat-bubble thinking">
-                  <details>
-                    <summary>Thinking...</summary>
-                    <div className="thinking-content">{m.text}</div>
-                  </details>
-                </div>
-              );
-            }
-            return (
-              <div key={i} className={`chat-bubble ${m.role}`}>
-                {m.text || m.content || ""}
-              </div>
-            );
-          })
-        )}
-      </div>
+      <MessageList messages={messages} innerRef={messagesRef} />
 
       {/* Idle Banner */}
       {uiState?.idle && (

@@ -39,8 +39,9 @@ export default function Workspace({
   } | null>(null);
 
   const tabsRef = useRef<HTMLDivElement>(null);
+  const lastUiHashRef = useRef("");
 
-  // Poll UI state
+  // Poll UI state — only update when values actually change
   useEffect(() => {
     if (activeView !== "chat") return;
 
@@ -49,6 +50,9 @@ export default function Workspace({
         const state = await api.get(
           `/api/sessions/${activeProject}/ui-state`
         );
+        const hash = `${state.interactive}:${state.type}:${state.idle}:${state.status}:${state.process}`;
+        if (hash === lastUiHashRef.current) return;
+        lastUiHashRef.current = hash;
         setUiState(state);
       } catch {
         /* ignore */
@@ -56,7 +60,7 @@ export default function Workspace({
     };
 
     poll();
-    const interval = setInterval(poll, 1000);
+    const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
   }, [activeProject, activeView]);
 
