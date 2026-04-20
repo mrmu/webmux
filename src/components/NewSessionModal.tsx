@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { api } from "@/lib/api";
 
 const COLORS = [
@@ -15,11 +15,21 @@ export default function NewSessionModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const projectsRoot = "/Users/audilu/next";
+  const [projectsRoot, setProjectsRoot] = useState("");
   const [name, setName] = useState("");
   const [display, setDisplay] = useState("");
-  const [cwd, setCwd] = useState(projectsRoot + "/");
+  const [cwd, setCwd] = useState("");
   const [cwdManual, setCwdManual] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const config = await api.get("/api/config");
+        setProjectsRoot(config.projectsRoot);
+        setCwd(config.projectsRoot + "/");
+      } catch { /* ignore */ }
+    })();
+  }, []);
   const [command, setCommand] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
@@ -74,7 +84,7 @@ export default function NewSessionModal({
             Working Directory
             <input
               type="text"
-              placeholder="/Users/audilu/next/my-project"
+              placeholder={projectsRoot ? `${projectsRoot}/my-project` : "loading..."}
               value={cwd}
               onChange={(e) => {
                 setCwd(e.target.value);
