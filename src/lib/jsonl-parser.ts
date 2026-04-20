@@ -2,9 +2,8 @@ import fs from "fs";
 import path from "path";
 
 const RE_ANSI = /\x1b\[[0-9;]*[a-zA-Z]/g;
-const HOST_HOME = process.env.HOST_HOME || "/home/devops_bot";
-const SESSION_MAP_PATH = path.join(HOST_HOME, ".ccbot", "session_map.json");
-const CLAUDE_PROJECTS = path.join(HOST_HOME, ".claude", "projects");
+const CLAUDE_DIR = path.join(process.env.HOME || "/Users/audilu", ".claude");
+const CLAUDE_PROJECTS = path.join(CLAUDE_DIR, "projects");
 const MAX_SUMMARY = 200;
 
 const SKIP_TYPES = new Set([
@@ -26,49 +25,34 @@ export interface ChatMessage {
   is_error?: boolean;
 }
 
-export function findSessionJsonl(tmuxSessionName: string): string | null {
-  if (!fs.existsSync(SESSION_MAP_PATH)) return null;
+/**
+ * Find the most recent JSONL session file for a project.
+ * Claude Code stores sessions at: ~/.claude/projects/{encoded-cwd}/{session-id}.jsonl
+ * Encoded cwd: replace non-alphanumeric chars with `-`
+ */
+export function findSessionJsonlByCwd(projectCwd: string): string | null {
+  if (!projectCwd) return null;
 
-  let sessionMap: Record<string, { session_id?: string; cwd?: string }>;
+  // Encode cwd the same way Claude Code does: /Users/foo/bar → -Users-foo-bar
+  const encodedCwd = projectCwd.replace(/[^a-zA-Z0-9-]/g, "-");
+  const projectDir = path.join(CLAUDE_PROJECTS, encodedCwd);
+
+  if (!fs.existsSync(projectDir)) return null;
+
+  // Find all JSONL files and pick the most recently modified
   try {
-    sessionMap = JSON.parse(fs.readFileSync(SESSION_MAP_PATH, "utf-8"));
+    const files = fs.readdirSync(projectDir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => {
+        const fullPath = path.join(projectDir, f);
+        return { path: fullPath, mtime: fs.statSync(fullPath).mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    return files.length > 0 ? files[0].path : null;
   } catch {
     return null;
   }
-
-  const candidates: { path: string; mtime: number }[] = [];
-
-  for (const [key, info] of Object.entries(sessionMap)) {
-    if (!key.startsWith(`${tmuxSessionName}:`)) continue;
-
-    const sessionId = info.session_id;
-    const cwd = info.cwd;
-    if (!sessionId || !cwd) continue;
-
-    const encodedCwd = cwd.replace(/[^a-zA-Z0-9-]/g, "-");
-    const jsonlPath = path.join(CLAUDE_PROJECTS, encodedCwd, `${sessionId}.jsonl`);
-
-    if (fs.existsSync(jsonlPath)) {
-      candidates.push({ path: jsonlPath, mtime: fs.statSync(jsonlPath).mtimeMs });
-    } else {
-      // Glob fallback
-      try {
-        const dirs = fs.readdirSync(CLAUDE_PROJECTS);
-        for (const dir of dirs) {
-          const p = path.join(CLAUDE_PROJECTS, dir, `${sessionId}.jsonl`);
-          if (fs.existsSync(p)) {
-            candidates.push({ path: p, mtime: fs.statSync(p).mtimeMs });
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => b.mtime - a.mtime);
-  return candidates[0].path;
 }
 
 function formatToolSummary(
@@ -170,10 +154,27 @@ function extractText(content: unknown): string {
   return "";
 }
 
-export function parseJsonlMessages(filePath: string): ChatMessage[] {
+export function parseJsonlMessages(
+  filePath: string,
+  maxMessages = 100
+): ChatMessage[] {
   let data: string;
   try {
-    data = fs.readFileSync(filePath, "utf-8");
+    // Read only the tail of large files for performance
+    const stat = fs.statSync(filePath);
+    if (stat.size > 500_000) {
+      // Read last 500KB — enough for recent conversation
+      const buf = Buffer.alloc(500_000);
+      const fd = fs.openSync(filePath, "r");
+      fs.readSync(fd, buf, 0, 500_000, stat.size - 500_000);
+      fs.closeSync(fd);
+      data = buf.toString("utf-8");
+      // Skip first partial line
+      const firstNewline = data.indexOf("\n");
+      if (firstNewline > 0) data = data.slice(firstNewline + 1);
+    } else {
+      data = fs.readFileSync(filePath, "utf-8");
+    }
   } catch {
     return [];
   }
@@ -318,5 +319,9 @@ export function parseJsonlMessages(filePath: string): ChatMessage[] {
     }
   }
 
+  // Return only the most recent messages for performance
+  if (messages.length > maxMessages) {
+    return messages.slice(-maxMessages);
+  }
   return messages;
 }

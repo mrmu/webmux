@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { getProjectCwd } from "@/lib/project-cwd";
 import * as tmux from "@/lib/tmux";
-import { findSessionJsonl, parseJsonlMessages } from "@/lib/jsonl-parser";
+import { findSessionJsonlByCwd, parseJsonlMessages } from "@/lib/jsonl-parser";
 
 export async function GET(
   request: NextRequest,
@@ -11,17 +12,20 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { name } = await params;
+  const cwd = await getProjectCwd(name);
 
-  // Try JSONL structured data first
-  const jsonlPath = findSessionJsonl(name);
-  if (jsonlPath) {
-    const messages = parseJsonlMessages(jsonlPath);
-    if (messages.length) {
-      return NextResponse.json({ messages, source: "jsonl" });
+  // Try JSONL structured data first (reliable, no duplicates)
+  if (cwd) {
+    const jsonlPath = findSessionJsonlByCwd(cwd);
+    if (jsonlPath) {
+      const messages = parseJsonlMessages(jsonlPath);
+      if (messages.length) {
+        return NextResponse.json({ messages, source: "jsonl" });
+      }
     }
   }
 
-  // Fallback: terminal parsing (limited scrollback for fast polling)
+  // Fallback: terminal parsing (limited scrollback)
   const content = await tmux.capturePane(name, 500);
   const messages = tmux.parseClaudeConversation(content);
   return NextResponse.json({ messages, source: "terminal" });
