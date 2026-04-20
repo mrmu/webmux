@@ -10,9 +10,6 @@ export default function LoginScreen({
   onSuccess: () => void;
   isFirstUser: boolean;
 }) {
-  const [mode, setMode] = useState<"login" | "register">(
-    isFirstUser ? "register" : "login"
-  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -25,7 +22,7 @@ export default function LoginScreen({
     setLoading(true);
 
     try {
-      if (mode === "register") {
+      if (isFirstUser) {
         await api.post("/api/auth/register", { email, password, name });
       } else {
         await api.post("/api/auth/login", { email, password });
@@ -34,8 +31,7 @@ export default function LoginScreen({
     } catch (err) {
       const msg = (err as Error).message;
       try {
-        const parsed = JSON.parse(msg);
-        setError(parsed.error || msg);
+        setError(JSON.parse(msg).error);
       } catch {
         setError(msg);
       }
@@ -49,14 +45,10 @@ export default function LoginScreen({
       <div className="login-container">
         <h1 className="logo">webmux</h1>
         <p className="login-subtitle">
-          {isFirstUser
-            ? "Create your admin account"
-            : mode === "login"
-              ? "Sign in to continue"
-              : "Create account"}
+          {isFirstUser ? "Create admin account" : "Sign in to continue"}
         </p>
         <form className="login-form" onSubmit={handleSubmit}>
-          {mode === "register" && (
+          {isFirstUser && (
             <input
               type="text"
               placeholder="Name"
@@ -80,30 +72,13 @@ export default function LoginScreen({
             minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
+            autoComplete={isFirstUser ? "new-password" : "current-password"}
           />
           <button type="submit" disabled={loading}>
-            {loading
-              ? "..."
-              : mode === "register"
-                ? "Create Account"
-                : "Sign In"}
+            {loading ? "..." : isFirstUser ? "Create Account" : "Sign In"}
           </button>
         </form>
         {error && <p className="error-text">{error}</p>}
-        {!isFirstUser && (
-          <button
-            className="auth-switch-btn"
-            onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
-              setError("");
-            }}
-          >
-            {mode === "login"
-              ? "Need an account? Register"
-              : "Already have an account? Sign in"}
-          </button>
-        )}
       </div>
     </div>
   );
