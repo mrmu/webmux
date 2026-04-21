@@ -188,11 +188,24 @@ export default function ChatView({
   const sendMessage = async () => {
     const text = input.trim();
     if (!text) return;
+
+    // Check if Claude is running before sending
+    try {
+      const state = await api.get(`/api/sessions/${sessionName}/ui-state`);
+      if (!state.process || state.idle) {
+        if (!confirm("Claude Code is not running. Send anyway?\n\nTip: Go to Terminal tab and click '▶ Claude Code' to start it.")) {
+          return;
+        }
+      }
+    } catch {
+      // Can't check — send anyway
+    }
+
     setInput("");
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
     } catch {
-      alert("Failed to send. Is Claude Code running? Check the Terminal tab.");
+      alert("Failed to send. Check the Terminal tab.");
     }
   };
 
