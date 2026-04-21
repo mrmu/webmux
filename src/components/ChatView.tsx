@@ -105,16 +105,8 @@ const MessageList = memo(
 
 export default function ChatView({
   sessionName,
-  uiState,
 }: {
   sessionName: string;
-  uiState: {
-    interactive: boolean;
-    type: string | null;
-    status: string | null;
-    idle: boolean;
-    process: string | null;
-  } | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -196,10 +188,6 @@ export default function ChatView({
   const sendMessage = async () => {
     const text = input.trim();
     if (!text) return;
-    if (uiState?.idle) {
-      alert("Please start Claude Code first (click the button above)");
-      return;
-    }
     setInput("");
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
@@ -224,92 +212,12 @@ export default function ChatView({
     }
   };
 
-  const [restarting, setRestarting] = useState(false);
-
-  const startClaude = async () => {
-    setRestarting(true);
-    try {
-      // Ensure tmux session exists (creates if not)
-      await api.post("/api/sessions", {
-        name: sessionName,
-        display_name: sessionName,
-      }).catch(() => {}); // ignore if already exists
-
-      // Small delay for session to be ready
-      await new Promise((r) => setTimeout(r, 500));
-
-      // Send the claude command
-      await api.post(`/api/sessions/${sessionName}/send`, {
-        text: "claude --dangerously-skip-permissions",
-      });
-      setTimeout(() => setRestarting(false), 3000);
-    } catch {
-      setRestarting(false);
-      alert("Failed to start Claude Code. Check the Terminal tab.");
-    }
-  };
-
   return (
     <div className="view-panel chat-view">
       <MessageList messages={messages} innerRef={messagesRef} />
 
-      {/* Idle Banner — shown when no Claude Code is running */}
-      {(uiState === null || uiState?.idle) && (
-        <div className="idle-banner">
-          <span className="idle-text">Claude Code is not running</span>
-          <button
-            className="idle-restart-btn"
-            onClick={startClaude}
-            disabled={restarting}
-          >
-            {restarting ? "Starting..." : "▶ Start Claude Code"}
-          </button>
-        </div>
-      )}
-
-      {/* Interactive Navigation */}
-      {uiState?.interactive && !uiState?.idle && (
-        <div className="interactive-nav">
-          <div className="nav-row">
-            <button className="nav-btn" onClick={() => sendSpecial("Space")}>
-              &#x2423; Space
-            </button>
-            <button className="nav-btn" onClick={() => sendSpecial("Up")}>
-              &uarr;
-            </button>
-            <button className="nav-btn" onClick={() => sendSpecial("Tab")}>
-              &#x21E5; Tab
-            </button>
-          </div>
-          {uiState.type !== "RestoreCheckpoint" && (
-            <div className="nav-row">
-              <button className="nav-btn" onClick={() => sendSpecial("Left")}>
-                &larr;
-              </button>
-              <button className="nav-btn" onClick={() => sendSpecial("Down")}>
-                &darr;
-              </button>
-              <button className="nav-btn" onClick={() => sendSpecial("Right")}>
-                &rarr;
-              </button>
-            </div>
-          )}
-          <div className="nav-row">
-            <button className="nav-btn" onClick={() => sendSpecial("Escape")}>
-              &#x238B; Esc
-            </button>
-            <button className="nav-btn" onClick={() => { const el = messagesRef.current; if (el) el.scrollTop = el.scrollHeight; }}>
-              &#x1F504;
-            </button>
-            <button className="nav-btn" onClick={() => sendSpecial("Enter")}>
-              &#x23CE; Enter
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Chat Input — only when Claude is running and not in interactive UI */}
-      {uiState && !uiState.interactive && !uiState.idle && (
+      {/* Chat Input — always visible */}
+      {(
         <div className="chat-input-area">
           <div className="chat-input-row">
             <textarea

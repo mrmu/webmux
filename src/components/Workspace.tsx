@@ -30,39 +30,8 @@ export default function Workspace({
   const [showFiles, setShowFiles] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [uiState, setUiState] = useState<{
-    interactive: boolean;
-    type: string | null;
-    status: string | null;
-    idle: boolean;
-    process: string | null;
-  } | null>(null);
 
   const tabsRef = useRef<HTMLDivElement>(null);
-  const lastUiHashRef = useRef("");
-
-  // Poll UI state — only update when values actually change
-  useEffect(() => {
-    if (activeView !== "chat") return;
-
-    const poll = async () => {
-      try {
-        const state = await api.get(
-          `/api/sessions/${activeProject}/ui-state`
-        );
-        const hash = `${state.interactive}:${state.type}:${state.idle}:${state.status}:${state.process}`;
-        if (hash === lastUiHashRef.current) return;
-        lastUiHashRef.current = hash;
-        setUiState(state);
-      } catch {
-        /* ignore */
-      }
-    };
-
-    poll();
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
-  }, [activeProject, activeView]);
 
   const switchProject = useCallback(
     (name: string) => {
@@ -71,7 +40,6 @@ export default function Workspace({
       setOpenFiles([]);
       setShowFiles(false);
       setShowNotes(false);
-      setUiState(null);
     },
     []
   );
@@ -211,19 +179,11 @@ export default function Workspace({
         </div>
       </div>
 
-      {/* Status Bar */}
-      {uiState?.status && (
-        <div className="status-bar">
-          <span className="status-spinner">&#x273B;</span>
-          <span className="status-text">{uiState.status}</span>
-        </div>
-      )}
-
       {/* Content Area */}
       <div className="workspace-content">
         {/* Chat View */}
         {activeView === "chat" && (
-          <ChatView key={activeProject} sessionName={activeProject} uiState={uiState} />
+          <ChatView key={activeProject} sessionName={activeProject} />
         )}
 
         {/* Terminal View */}
