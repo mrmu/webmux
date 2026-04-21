@@ -102,8 +102,8 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
   // Use ={name} for exact match (prevents fnmatch pattern injection)
   const target =
     windowIndex !== undefined
-      ? `=${sessionName}:${windowIndex}`
-      : `=${sessionName}`;
+      ? `${sessionName}:${windowIndex}`
+      : `${sessionName}`;
 
   const socketArgs = process.env.TMUX_SOCKET
     ? ["-S", process.env.TMUX_SOCKET]

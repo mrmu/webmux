@@ -81,11 +81,11 @@ export async function createSession(
   await runTmux("set-environment", "-g", "PATH", currentPath).catch(() => {});
 
   // Export PATH in this session's shell
-  await runTmux("send-keys", "-t", `=${name}`, `export PATH="${currentPath}"`, "Enter").catch(() => {});
+  await runTmux("send-keys", "-t", `${name}`, `export PATH="${currentPath}"`, "Enter").catch(() => {});
 
   // Now send the actual command if provided
   if (command) {
-    await runTmux("send-keys", "-t", `=${name}`, command, "Enter").catch(() => {});
+    await runTmux("send-keys", "-t", `${name}`, command, "Enter").catch(() => {});
   }
 
   const sessions = await listSessions();
@@ -95,36 +95,36 @@ export async function createSession(
 }
 
 export async function killSession(name: string): Promise<void> {
-  await runTmux("kill-session", "-t", `=${name}`);
+  await runTmux("kill-session", "-t", `${name}`);
 }
 
 export async function sendKeys(
   sessionName: string,
   keys: string
 ): Promise<void> {
-  await runTmux("send-keys", "-t", `=${sessionName}`, "-l", keys);
-  await runTmux("send-keys", "-t", `=${sessionName}`, "Enter");
+  await runTmux("send-keys", "-t", `${sessionName}`, "-l", keys);
+  await runTmux("send-keys", "-t", `${sessionName}`, "Enter");
 }
 
 export async function sendRawKeys(
   sessionName: string,
   keys: string
 ): Promise<void> {
-  await runTmux("send-keys", "-t", `=${sessionName}`, "-l", keys);
+  await runTmux("send-keys", "-t", `${sessionName}`, "-l", keys);
 }
 
 export async function sendSpecialKey(
   sessionName: string,
   key: string
 ): Promise<void> {
-  await runTmux("send-keys", "-t", `=${sessionName}`, key);
+  await runTmux("send-keys", "-t", `${sessionName}`, key);
 }
 
 export async function capturePane(
   sessionName: string,
   scrollback = 500
 ): Promise<string> {
-  return runTmux("capture-pane", "-t", `=${sessionName}`, "-p", "-S", `-${scrollback}`);
+  return runTmux("capture-pane", "-t", `${sessionName}`, "-p", "-S", `-${scrollback}`);
 }
 
 export async function getPaneCommand(sessionName: string): Promise<string> {
@@ -132,7 +132,7 @@ export async function getPaneCommand(sessionName: string): Promise<string> {
     const out = await runTmux(
       "display-message",
       "-t",
-      `=${sessionName}`,
+      `${sessionName}`,
       "-p",
       "#{pane_current_command}"
     );
@@ -150,7 +150,7 @@ export async function resizePane(
   await runTmux(
     "resize-window",
     "-t",
-    `=${sessionName}`,
+    `${sessionName}`,
     "-x",
     String(width),
     "-y",
@@ -171,7 +171,7 @@ export async function listWindows(sessionName: string): Promise<TmuxWindow[]> {
     const out = await runTmux(
       "list-windows",
       "-t",
-      `=${sessionName}`,
+      `${sessionName}`,
       "-F",
       "#{window_index}|||#{window_name}|||#{window_active}"
     );
@@ -197,7 +197,7 @@ export async function createWindow(
   name?: string,
   cwd?: string
 ): Promise<TmuxWindow> {
-  const args = ["new-window", "-t", `=${sessionName}`];
+  const args = ["new-window", "-t", `${sessionName}`];
   if (name) args.push("-n", name);
   if (cwd) args.push("-c", cwd);
   await runTmux(...args);
@@ -211,7 +211,7 @@ export async function killWindow(
   sessionName: string,
   windowIndex: number
 ): Promise<void> {
-  await runTmux("kill-window", "-t", `=${sessionName}:${windowIndex}`);
+  await runTmux("kill-window", "-t", `${sessionName}:${windowIndex}`);
 }
 
 /** Lines to filter from Claude Code terminal output. */
