@@ -2,12 +2,11 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
 # Prerequisites on host:
-#   - tmux, git, node, Claude Code installed and authenticated
+#   - tmux, git, Claude Code installed and authenticated
 #
 # pid: host — container shares host PID namespace, so:
 #   - tmux sessions run as host processes
 #   - Claude Code (installed on host) works inside tmux sessions
-#   - No need to install Claude Code in the container
 services:
   app:
     user: "${HOST_UID}:${HOST_GID}"
@@ -17,14 +16,15 @@ services:
       VIRTUAL_PORT: "3000"
       LETSENCRYPT_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
-      PROJECTS_ROOT: ${HOST_USER_HOME:-/home/devops_bot}
-      HOME: ${HOST_USER_HOME:-/home/devops_bot}
-      # Include host user's local bin in PATH for claude, etc.
-      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOST_USER_HOME:-/root}/.local/bin
+      PROJECTS_ROOT: ${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}
+      HOME: ${HOST_USER_HOME:-/home/devops}
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOST_USER_HOME:-/home/devops}/.local/bin
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_ZONE_ID: ${CF_ZONE_ID:-}
     volumes:
       # Host tmux socket
       - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
-      # Host home — projects, claude config, ssh keys, .local/bin
-      - ${HOST_USER_HOME:-/home/devops_bot}:${HOST_USER_HOME:-/home/devops_bot}:rw
+      # Host user home — claude config, ssh keys, .local/bin
+      - ${HOST_USER_HOME:-/home/devops}:${HOST_USER_HOME:-/home/devops}:rw
+      # Projects directory
+      - ${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}:${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}:rw
