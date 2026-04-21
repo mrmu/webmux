@@ -2,16 +2,13 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getProjectCwd } from "@/lib/project-cwd";
-import {
-  findSessionJsonlById,
-  listSessionJsonls,
-  parseJsonlMessages,
-} from "@/lib/jsonl-parser";
+import { listSessionJsonls, parseJsonlMessages } from "@/lib/jsonl-parser";
 import fs from "fs";
 
 /**
- * SSE endpoint: streams chat messages when the JSONL file changes.
- * Sends full message list on connect, then incremental updates on file change.
+ * SSE endpoint: streams chat messages from the latest JSONL file.
+ * Always tracks the most recent Claude Code session (by mtime).
+ * When Claude restarts (new JSONL), automatically switches to it.
  */
 export async function GET(
   request: NextRequest,
@@ -26,27 +23,15 @@ export async function GET(
     return new Response("Project not found", { status: 404 });
   }
 
-  // Find the JSONL file
-  let jsonlPath: string | null = null;
-  const project = await prisma.project
-    .findUnique({ where: { name }, select: { jsonlSessionId: true } })
-    .catch(() => null);
-
-  if (project?.jsonlSessionId) {
-    jsonlPath = findSessionJsonlById(cwd, project.jsonlSessionId);
-  }
-  if (!jsonlPath) {
-    const sessions = listSessionJsonls(cwd);
-    if (sessions.length > 0) {
-      jsonlPath = sessions[0].path;
-      await prisma.project
-        .update({ where: { name }, data: { jsonlSessionId: sessions[0].sessionId } })
-        .catch(() => {});
-    }
-  }
-
   const encoder = new TextEncoder();
   let closed = false;
+  let jsonlPath: string | null = null;
+  let watcher: fs.FSWatcher | null = null;
+
+  function findLatestJsonl(): { path: string; sessionId: string } | null {
+    const sessions = listSessionJsonls(cwd!);
+    return sessions.length > 0 ? sessions[0] : null;
+  }
 
   const stream = new ReadableStream({
     start(controller) {
@@ -65,50 +50,48 @@ export async function GET(
           const messages = parseJsonlMessages(jsonlPath);
           sendEvent(JSON.stringify({ messages, source: "jsonl" }));
         } catch {
-          /* ignore parse errors */
+          /* ignore */
         }
       }
 
-      // Send initial messages
-      sendMessages();
-
-      // Watch the JSONL file for changes
-      let watcher: fs.FSWatcher | null = null;
-      if (jsonlPath && fs.existsSync(jsonlPath)) {
+      function watchFile(path: string) {
+        if (watcher) watcher.close();
         let debounce: ReturnType<typeof setTimeout> | null = null;
-        watcher = fs.watch(jsonlPath, () => {
-          // Debounce: Claude Code writes multiple lines quickly
+        watcher = fs.watch(path, () => {
           if (debounce) clearTimeout(debounce);
-          debounce = setTimeout(() => {
-            sendMessages();
-          }, 300);
+          debounce = setTimeout(() => sendMessages(), 300);
         });
-
-        watcher.on("error", () => {
-          closed = true;
-          controller.close();
-        });
+        watcher.on("error", () => {});
       }
 
-      // Also check for new JSONL files periodically (if claude restarts)
+      // Initial: find latest JSONL
+      const latest = findLatestJsonl();
+      if (latest) {
+        jsonlPath = latest.path;
+        // Update DB
+        prisma.project
+          .update({ where: { name }, data: { jsonlSessionId: latest.sessionId } })
+          .catch(() => {});
+        sendMessages();
+        watchFile(jsonlPath);
+      }
+
+      // Check for new JSONL files every 3 seconds (claude restart)
       const checkInterval = setInterval(() => {
         if (closed) { clearInterval(checkInterval); return; }
-        if (!cwd) return;
-        const sessions = listSessionJsonls(cwd);
-        if (sessions.length > 0 && sessions[0].path !== jsonlPath) {
-          // New session file appeared
-          jsonlPath = sessions[0].path;
-          if (watcher) watcher.close();
+        const latest = findLatestJsonl();
+        if (latest && latest.path !== jsonlPath) {
+          // New session detected — switch to it
+          jsonlPath = latest.path;
+          prisma.project
+            .update({ where: { name }, data: { jsonlSessionId: latest.sessionId } })
+            .catch(() => {});
           sendMessages();
-          let debounce: ReturnType<typeof setTimeout> | null = null;
-          watcher = fs.watch(jsonlPath, () => {
-            if (debounce) clearTimeout(debounce);
-            debounce = setTimeout(() => sendMessages(), 300);
-          });
+          watchFile(jsonlPath);
         }
-      }, 10000);
+      }, 3000);
 
-      // Keepalive ping every 30s
+      // Keepalive
       const keepalive = setInterval(() => {
         if (closed) { clearInterval(keepalive); return; }
         try {
@@ -118,7 +101,7 @@ export async function GET(
         }
       }, 30000);
 
-      // Cleanup on abort
+      // Cleanup
       request.signal.addEventListener("abort", () => {
         closed = true;
         if (watcher) watcher.close();
