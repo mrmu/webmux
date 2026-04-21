@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const projectsRoot = await getSetting("projectsRoot");
-  return NextResponse.json({ projectsRoot });
+  const localHost = await getSetting("localHost");
+  return NextResponse.json({ projectsRoot, localHost });
 }
 
 export async function PUT(request: NextRequest) {
@@ -17,6 +18,9 @@ export async function PUT(request: NextRequest) {
   const body = await request.json();
   if (body.projectsRoot !== undefined) {
     await setSetting("projectsRoot", body.projectsRoot);
+  }
+  if (body.localHost !== undefined) {
+    await setSetting("localHost", body.localHost);
   }
   return NextResponse.json({ ok: true });
 }

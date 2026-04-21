@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { prisma } from "./db";
+import { getSetting } from "./settings";
 
 /**
  * Sync project hosts from DB to .claude/webmux-hosts.md in the project directory.
@@ -26,8 +27,17 @@ export async function syncHostsFile(projectName: string): Promise<void> {
 
   try { fs.mkdirSync(claudeDir, { recursive: true }); } catch { /* ignore */ }
 
-  const isLocal = (target: string) =>
-    target === "localhost" || target === "127.0.0.1" || target === "local";
+  // Check if a host target matches this machine
+  const localHostSetting = await getSetting("localHost") || "";
+  const localAliases = new Set(["localhost", "127.0.0.1", "local"]);
+  if (localHostSetting) {
+    // Add the configured local host and common variations
+    localAliases.add(localHostSetting);
+    // Also match partial: "devops@server" matches "server" and "devops@server"
+    const parts = localHostSetting.split("@");
+    if (parts.length === 2) localAliases.add(parts[1]);
+  }
+  const isLocal = (target: string) => localAliases.has(target);
 
   const lines = [
     "# Deployment Hosts (managed by webmux)",

@@ -29,6 +29,7 @@ export default function AccountPage({
   const [newUserPw, setNewUserPw] = useState("");
   const [addMsg, setAddMsg] = useState("");
   const [projectsRoot, setProjectsRoot] = useState("");
+  const [localHost, setLocalHost] = useState("");
   const [settingsMsg, setSettingsMsg] = useState("");
 
   const loadUsers = useCallback(async () => {
@@ -40,6 +41,7 @@ export default function AccountPage({
     try {
       const s = await api.get("/api/settings");
       setProjectsRoot(s.projectsRoot || "");
+      setLocalHost(s.localHost || "");
     } catch { /* ignore */ }
   }, []);
 
@@ -79,7 +81,7 @@ export default function AccountPage({
   const saveSettings = async () => {
     setSettingsMsg("");
     try {
-      await api.put("/api/settings", { projectsRoot });
+      await api.put("/api/settings", { projectsRoot, localHost });
       setSettingsMsg("Saved");
     } catch { setSettingsMsg("Failed"); }
   };
@@ -103,8 +105,15 @@ export default function AccountPage({
           <h3>System</h3>
           <div className="form-row">
             <label>Projects Root</label>
+            <input type="text" value={projectsRoot} onChange={(e) => setProjectsRoot(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <label>Local SSH Host</label>
+            <input type="text" placeholder="e.g. devops@linode-audi-inv" value={localHost} onChange={(e) => setLocalHost(e.target.value)} />
+            <p className="settings-hint">Projects deployed to this host will run commands locally instead of SSH</p>
+          </div>
+          <div className="form-row">
             <div className="form-input-group">
-              <input type="text" value={projectsRoot} onChange={(e) => setProjectsRoot(e.target.value)} />
               <button className="btn-sm" onClick={saveSettings}>Save</button>
             </div>
             {settingsMsg && <p className={settingsMsg === "Saved" ? "msg-ok" : "msg-err"}>{settingsMsg}</p>}
