@@ -19,6 +19,8 @@ services:
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
       PROJECTS_ROOT: ${HOST_USER_HOME:-/home/devops_bot}
       HOME: ${HOST_USER_HOME:-/home/devops_bot}
+      # Include host user's local bin in PATH for claude, etc.
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOST_USER_HOME:-/root}/.local/bin
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_ZONE_ID: ${CF_ZONE_ID:-}
     volumes:
