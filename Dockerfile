@@ -23,8 +23,9 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# tmux + build tools for node-pty native compile
-RUN apk add --no-cache openssl tmux python3 make g++
+# tmux + git + tools + Claude Code
+RUN apk add --no-cache openssl tmux git curl bash openssh-client python3 make g++
+RUN npm install -g @anthropic-ai/claude-code
 
 # Install prod-server runtime deps (ws, node-pty, jsonwebtoken)
 RUN npm init -y > /dev/null 2>&1 && \
