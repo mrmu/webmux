@@ -28,7 +28,9 @@ async function runTmux(...args: string[]): Promise<string> {
       stderr.includes("no server running") ||
       stderr.includes("No such file or directory") ||
       stderr.includes("session not found") ||
-      stderr.includes("can't find session")
+      stderr.includes("can't find session") ||
+      stderr.includes("can't find pane") ||
+      stderr.includes("can't find window")
     ) {
       return "";
     }
