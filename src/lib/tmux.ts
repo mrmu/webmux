@@ -71,6 +71,10 @@ export async function createSession(
   command?: string,
   cwd?: string
 ): Promise<TmuxSession> {
+  // Set PATH in tmux global env so new sessions can find host tools (claude, git, etc.)
+  const currentPath = process.env.PATH || "";
+  await runTmux("set-environment", "-g", "PATH", currentPath).catch(() => {});
+
   const args = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
   if (cwd) args.push("-c", cwd);
   if (command) args.push(command);
