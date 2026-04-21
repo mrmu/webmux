@@ -239,7 +239,7 @@ export default function ChatView({
 
       // Send the claude command
       await api.post(`/api/sessions/${sessionName}/send`, {
-        text: "claude",
+        text: "claude --dangerously-skip-permissions",
       });
       setTimeout(() => setRestarting(false), 3000);
     } catch {
