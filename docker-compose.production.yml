@@ -2,15 +2,16 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
 # Prerequisites on host:
-#   - tmux installed
-#   - Claude Code installed and authenticated
-#   - Dev user created (see docs/deploy/setup.md)
+#   - tmux, git, node, Claude Code installed and authenticated
 #
-# Required .env vars:
-#   HOST_UID, HOST_GID, HOST_USER_HOME
+# pid: host — container shares host PID namespace, so:
+#   - tmux sessions run as host processes
+#   - Claude Code (installed on host) works inside tmux sessions
+#   - No need to install Claude Code in the container
 services:
   app:
     user: "${HOST_UID}:${HOST_GID}"
+    pid: host
     environment:
       VIRTUAL_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
       VIRTUAL_PORT: "3000"
@@ -21,7 +22,7 @@ services:
       CF_API_TOKEN: ${CF_API_TOKEN:-}
       CF_ZONE_ID: ${CF_ZONE_ID:-}
     volumes:
-      # Host tmux socket — container tmux connects to host tmux server
+      # Host tmux socket
       - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
-      # Host home — projects, claude config, ssh keys
+      # Host home — projects, claude config, ssh keys, .local/bin
       - ${HOST_USER_HOME:-/home/devops_bot}:${HOST_USER_HOME:-/home/devops_bot}:rw
