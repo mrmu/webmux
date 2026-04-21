@@ -22,8 +22,17 @@ export default function TerminalView({
   // Load windows list
   const loadWindows = useCallback(async () => {
     try {
-      const data = await api.get(`/api/sessions/${sessionName}/windows`);
-      setWindows(data);
+      let data = await api.get(`/api/sessions/${sessionName}/windows`);
+      if (!data || data.length === 0) {
+        // Session doesn't exist — create it
+        await api.post("/api/sessions", {
+          name: sessionName,
+          display_name: sessionName,
+        }).catch(() => {});
+        // Retry loading windows
+        data = await api.get(`/api/sessions/${sessionName}/windows`);
+      }
+      setWindows(data || []);
     } catch {
       setWindows([]);
     }
