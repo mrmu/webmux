@@ -122,14 +122,15 @@ export default function ChatView({
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
 
-  // Instant initial load via fetch
+  // Clear and reload when switching projects
   useEffect(() => {
+    setMessages([]);
     (async () => {
       try {
         const res = await fetch(`/api/sessions/${sessionName}/chat`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.messages?.length) setMessages(data.messages);
+        setMessages(data.messages || []);
       } catch { /* SSE will pick up */ }
     })();
   }, [sessionName]);

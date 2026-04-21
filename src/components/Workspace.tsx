@@ -223,12 +223,12 @@ export default function Workspace({
       <div className="workspace-content">
         {/* Chat View */}
         {activeView === "chat" && (
-          <ChatView sessionName={activeProject} uiState={uiState} />
+          <ChatView key={activeProject} sessionName={activeProject} uiState={uiState} />
         )}
 
         {/* Terminal View */}
         {activeView === "terminal" && (
-          <TerminalView sessionName={activeProject} />
+          <TerminalView key={activeProject} sessionName={activeProject} />
         )}
 
         {/* File Editor Views */}
