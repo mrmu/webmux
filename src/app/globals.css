@@ -656,6 +656,14 @@ html, body {
   align-items: center;
   flex-shrink: 0;
 }
+.terminal-claude-btn {
+  padding: 0.3rem 0.7rem; border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 6px; background: rgba(99,102,241,0.1);
+  color: var(--accent); font-size: 0.78rem; font-weight: 600;
+  cursor: pointer; transition: background 0.2s; white-space: nowrap;
+}
+.terminal-claude-btn:hover { background: rgba(99,102,241,0.2); }
+.terminal-claude-btn:active { background: var(--accent); color: white; }
 
 .terminal-focus-hint {
   margin-left: auto;

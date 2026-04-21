@@ -201,6 +201,19 @@ export default function TerminalView({
         <div className="terminal-container" ref={containerRef} />
       </div>
       <div className="terminal-bar">
+        <button
+          className="terminal-claude-btn"
+          onClick={() => {
+            // Send claude command to the current tmux window via PTY
+            const ws = cleanupRef.current;
+            // Can't access ws directly, use API instead
+            api.post(`/api/sessions/${sessionName}/send`, {
+              text: "claude --dangerously-skip-permissions",
+            }).catch(() => {});
+          }}
+        >
+          ▶ Claude Code
+        </button>
         <span className="terminal-focus-hint">
           Tap terminal to type
         </span>
