@@ -1,35 +1,33 @@
 "use client";
 
 import { useState, useEffect, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isFirstUser, setIsFirstUser] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [projectsRoot, setProjectsRoot] = useState("/root/projects");
+  const [projectsRoot, setProjectsRoot] = useState("/var/docker-www/wp-proxy-sites");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/check");
-        const auth = await res.json();
+    fetch("/api/auth/check")
+      .then((r) => r.json())
+      .then((auth) => {
         if (auth.authenticated) {
-          router.replace("/projects");
+          window.location.href = "/projects";
           return;
         }
         setIsFirstUser(!auth.hasUsers);
-      } catch {
+        setLoading(false);
+      })
+      .catch(() => {
         setIsFirstUser(false);
-      }
-      setLoading(false);
-    })();
-  }, [router]);
+        setLoading(false);
+      });
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,7 +39,7 @@ export default function LoginPage() {
       } else {
         await api.post("/api/auth/login", { email, password });
       }
-      router.replace("/projects");
+      window.location.href = "/projects";
     } catch (err) {
       const msg = (err as Error).message;
       try { setError(JSON.parse(msg).error); } catch { setError(msg); }
@@ -78,11 +76,11 @@ export default function LoginPage() {
             value={password} onChange={(e) => setPassword(e.target.value)}
             autoComplete={isFirstUser ? "new-password" : "current-password"} />
           {isFirstUser && (
-            <input type="text" placeholder="Projects directory (e.g. /root/projects)"
+            <input type="text" placeholder="Projects directory"
               value={projectsRoot} onChange={(e) => setProjectsRoot(e.target.value)} required />
           )}
           <button type="submit" disabled={loading}>
-            {loading ? "..." : isFirstUser ? "Create Account" : "Sign In"}
+            {isFirstUser ? "Create Account" : "Sign In"}
           </button>
         </form>
         {error && <p className="error-text">{error}</p>}
