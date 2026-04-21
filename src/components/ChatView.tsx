@@ -201,9 +201,9 @@ export default function ChatView({
       // Can't check — send anyway
     }
 
-    setInput("");
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
+      setInput(""); // Only clear after successful send
     } catch {
       alert("Failed to send. Check the Terminal tab.");
     }
