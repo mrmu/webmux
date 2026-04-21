@@ -6,8 +6,12 @@ async function fetchApi(url: string, opts: RequestInit = {}) {
     headers: { "Content-Type": "application/json", ...opts.headers },
   });
   if (res.status === 401) {
-    window.location.reload();
-    throw new Error("Unauthorized");
+    // Don't reload — redirect to login (unless already on login page)
+    if (!window.location.pathname.startsWith("/login")) {
+      window.location.href = "/login";
+    }
+    const text = await res.text();
+    throw new Error(text);
   }
   if (!res.ok) throw new Error(await res.text());
   return res.json();
