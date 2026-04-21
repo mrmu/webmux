@@ -1,8 +1,8 @@
-FROM node:22-alpine AS base
+FROM node:22-slim AS base
 
 # --- Dependencies ---
 FROM base AS deps
-RUN apk add --no-cache libc6-compat openssl python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
@@ -11,7 +11,7 @@ RUN npm ci || npm install
 
 # --- Builder ---
 FROM base AS builder
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -23,15 +23,17 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# tmux + git + tools (Claude Code runs on host, not in container)
-RUN apk add --no-cache openssl tmux git curl bash openssh-client python3 make g++
+# tmux + git + tools (Claude Code binary runs from host via volume mount)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl tmux git curl bash openssh-client python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install prod-server runtime deps (ws, node-pty, jsonwebtoken)
 RUN npm init -y > /dev/null 2>&1 && \
     npm install --omit=dev ws node-pty@1.0.0 jsonwebtoken 2>/dev/null | tail -1
 
 # Remove build tools after native compile
-RUN apk del python3 make g++ 2>/dev/null || true
+RUN apt-get purge -y python3 make g++ && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* || true
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
