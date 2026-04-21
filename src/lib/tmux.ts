@@ -71,14 +71,22 @@ export async function createSession(
   command?: string,
   cwd?: string
 ): Promise<TmuxSession> {
-  // Set PATH in tmux global env so new sessions can find host tools (claude, git, etc.)
+  const args = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
+  if (cwd) args.push("-c", cwd);
+  // Don't pass command yet — set PATH first, then send command
+  await runTmux(...args);
+
+  // Set PATH in tmux global env so sessions can find host tools (claude, git, etc.)
   const currentPath = process.env.PATH || "";
   await runTmux("set-environment", "-g", "PATH", currentPath).catch(() => {});
 
-  const args = ["new-session", "-d", "-s", name, "-x", "200", "-y", "50"];
-  if (cwd) args.push("-c", cwd);
-  if (command) args.push(command);
-  await runTmux(...args);
+  // Export PATH in this session's shell
+  await runTmux("send-keys", "-t", `=${name}`, `export PATH="${currentPath}"`, "Enter").catch(() => {});
+
+  // Now send the actual command if provided
+  if (command) {
+    await runTmux("send-keys", "-t", `=${name}`, command, "Enter").catch(() => {});
+  }
 
   const sessions = await listSessions();
   const session = sessions.find((s) => s.name === name);
