@@ -17,7 +17,8 @@ export default function LoginPage() {
   useEffect(() => {
     (async () => {
       try {
-        const auth = await api.get("/api/auth/check");
+        const res = await fetch("/api/auth/check");
+        const auth = await res.json();
         if (auth.authenticated) {
           router.replace("/projects");
           return;
