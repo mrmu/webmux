@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
 
-const JWT_SECRET = process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.WEBMUX_SECRET || "dev-secret-change-in-production"
+);
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/auth/check"];
 
-export function middleware(request: NextRequest) {
+async function isValidToken(token: string): Promise<boolean> {
+  try {
+    await jwtVerify(token, JWT_SECRET);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Root → redirect based on auth
   if (pathname === "/") {
     const token = request.cookies.get("webmux_token")?.value;
-    if (token) {
-      try {
-        jwt.verify(token, JWT_SECRET);
-        return NextResponse.redirect(new URL("/projects", request.url));
-      } catch { /* fall through to login redirect */ }
+    if (token && (await isValidToken(token))) {
+      return NextResponse.redirect(new URL("/projects", request.url));
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -30,27 +38,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check auth token
   const token = request.cookies.get("webmux_token")?.value;
-  if (!token) {
+  if (!token || !(await isValidToken(token))) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  try {
-    jwt.verify(token, JWT_SECRET);
-    return NextResponse.next();
-  } catch {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
+  return NextResponse.next();
 }
 
 export const config = {
-  runtime: "nodejs",
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
