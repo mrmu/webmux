@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { syncHostsFile } from "@/lib/sync-hosts-file";
 
 export async function GET(
   request: NextRequest,
@@ -34,7 +35,6 @@ export async function POST(
     );
   }
 
-  // Ensure project exists
   await prisma.project.upsert({
     where: { name },
     update: {},
@@ -50,6 +50,9 @@ export async function POST(
       description: body.description || "",
     },
   });
+
+  // Sync hosts file for Claude Code
+  await syncHostsFile(name);
 
   return NextResponse.json(host);
 }

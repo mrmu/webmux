@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { syncHostsFile } from "@/lib/sync-hosts-file";
 
 export async function PUT(
   request: NextRequest,
@@ -9,7 +10,7 @@ export async function PUT(
   if (!requireAuth(request))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
+  const { name, id } = await params;
   const body = await request.json();
 
   const host = await prisma.host.update({
@@ -22,6 +23,7 @@ export async function PUT(
     },
   });
 
+  await syncHostsFile(name);
   return NextResponse.json(host);
 }
 
@@ -32,7 +34,8 @@ export async function DELETE(
   if (!requireAuth(request))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
+  const { name, id } = await params;
   await prisma.host.delete({ where: { id: parseInt(id) } });
+  await syncHostsFile(name);
   return NextResponse.json({ ok: true });
 }
