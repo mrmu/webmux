@@ -182,14 +182,13 @@ export default function Workspace({
       {/* Content Area */}
       <div className="workspace-content">
         {/* Chat View */}
-        {activeView === "chat" && (
+        {/* Chat and Terminal stay mounted, toggle with CSS */}
+        <div style={{ display: activeView === "chat" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
           <ChatView key={activeProject} sessionName={activeProject} />
-        )}
-
-        {/* Terminal View */}
-        {activeView === "terminal" && (
+        </div>
+        <div style={{ display: activeView === "terminal" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
           <TerminalView key={activeProject} sessionName={activeProject} />
-        )}
+        </div>
 
         {/* File Editor Views */}
         {openFiles.map((f) => {
