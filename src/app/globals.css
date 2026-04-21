@@ -433,6 +433,9 @@ html, body {
   border-top: 1px solid rgba(255,255,255,0.06);
   flex-shrink: 0;
 }
+.chat-send-error {
+  font-size: 0.78rem; color: #fbbf24; padding: 0.3rem 0;
+}
 
 .chat-input-row {
   display: flex;

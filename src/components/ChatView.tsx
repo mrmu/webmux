@@ -185,17 +185,19 @@ export default function ChatView({
     if (isAtBottom) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  const [sendError, setSendError] = useState("");
+
   const sendMessage = async () => {
     const text = input.trim();
     if (!text) return;
+    setSendError("");
 
     // Check if Claude is running before sending
     try {
       const state = await api.get(`/api/sessions/${sessionName}/ui-state`);
       if (!state.process || state.idle) {
-        if (!confirm("Claude Code is not running. Send anyway?\n\nTip: Go to Terminal tab and click '▶ Claude Code' to start it.")) {
-          return;
-        }
+        setSendError("Claude Code is not running. Start it from the Terminal tab.");
+        return;
       }
     } catch {
       // Can't check — send anyway
@@ -203,9 +205,9 @@ export default function ChatView({
 
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
-      setInput(""); // Only clear after successful send
+      setInput("");
     } catch {
-      alert("Failed to send. Check the Terminal tab.");
+      setSendError("Failed to send. Check the Terminal tab.");
     }
   };
 
@@ -232,6 +234,9 @@ export default function ChatView({
       {/* Chat Input — always visible */}
       {(
         <div className="chat-input-area">
+          {sendError && (
+            <div className="chat-send-error">{sendError}</div>
+          )}
           <div className="chat-input-row">
             <textarea
               className="chat-input"
@@ -240,6 +245,7 @@ export default function ChatView({
               value={input}
               onChange={(e) => {
                 setInput(e.target.value);
+                if (sendError) setSendError("");
                 e.target.style.height = "auto";
                 e.target.style.height =
                   Math.min(e.target.scrollHeight, 120) + "px";
