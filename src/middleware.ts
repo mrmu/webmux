@@ -8,6 +8,18 @@ const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/a
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Root → redirect based on auth
+  if (pathname === "/") {
+    const token = request.cookies.get("webmux_token")?.value;
+    if (token) {
+      try {
+        jwt.verify(token, JWT_SECRET);
+        return NextResponse.redirect(new URL("/projects", request.url));
+      } catch { /* fall through to login redirect */ }
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   // Allow public paths and static assets
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
