@@ -392,22 +392,6 @@ export default function ChatView({
     }
   };
 
-  const sendSpecial = async (key: string) => {
-    try {
-      await api.post(`/api/sessions/${sessionName}/send`, { special_key: key });
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const sendText = async (text: string) => {
-    try {
-      await api.post(`/api/sessions/${sessionName}/send`, { text });
-    } catch {
-      /* ignore */
-    }
-  };
-
   const active = sessionInfo?.sessions.find((s) => s.active);
   const activeMode: "pinned" | "tmux" | "latest" = sessionInfo?.pinned
     ? "pinned"
@@ -520,43 +504,6 @@ export default function ChatView({
             />
             <button className="send-btn" onClick={sendMessage}>
               &uarr;
-            </button>
-          </div>
-          <div className="chat-shortcuts">
-            <button
-              className="shortcut-btn"
-              onClick={() => sendSpecial("C-c")}
-              title="Ctrl+C"
-            >
-              &#x2303;C
-            </button>
-            <button
-              className="shortcut-btn"
-              onClick={() => sendSpecial("Escape")}
-              title="Escape"
-            >
-              Esc
-            </button>
-            <button
-              className="shortcut-btn"
-              onClick={() => sendText("y")}
-              title="Yes + Enter"
-            >
-              y &#x21B5;
-            </button>
-            <button
-              className="shortcut-btn"
-              onClick={() => sendText("n")}
-              title="No + Enter"
-            >
-              n &#x21B5;
-            </button>
-            <button
-              className="shortcut-btn"
-              onClick={() => { const el = messagesRef.current; if (el) el.scrollTop = el.scrollHeight; }}
-              title="Refresh"
-            >
-              &#x27F3;
             </button>
           </div>
         </div>

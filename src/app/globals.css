@@ -525,30 +525,6 @@ select {
 
 .send-btn:hover { background: var(--accent-hover); }
 
-.chat-shortcuts {
-  display: flex;
-  gap: 0.4rem;
-  margin-top: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.1rem;
-}
-
-.shortcut-btn {
-  padding: 0.3rem 0.65rem;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  font-family: 'SF Mono', monospace;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.shortcut-btn:hover, .shortcut-btn:active { background: var(--bg-hover); }
-
 /* ─── Status Bar ─────────────────────────────────────────────────── */
 .status-bar {
   display: flex;
