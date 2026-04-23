@@ -132,6 +132,25 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
     }
   });
 
+  // Heartbeat: detect dead connections silently killed by NAT/proxy/OS.
+  // Sends native ws ping every 30s; if no pong by the next tick, terminate.
+  let isAlive = true;
+  ws.on("pong", () => {
+    isAlive = true;
+  });
+  const heartbeat = setInterval(() => {
+    if (!isAlive) {
+      ws.terminate();
+      return;
+    }
+    isAlive = false;
+    try {
+      ws.ping();
+    } catch {
+      /* ignore */
+    }
+  }, 30000);
+
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
@@ -139,12 +158,22 @@ function handleTerminalConnection(ws: WebSocket, sessionName: string, windowInde
         ptyProcess.write(msg.data);
       } else if (msg.type === "resize" && msg.cols && msg.rows) {
         ptyProcess.resize(msg.cols, msg.rows);
+      } else if (msg.type === "ping") {
+        // App-level ping — lets the client probe the connection
+        // without relying on browser-exposed pong events.
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "pong" }));
+        }
       }
     } catch {
       /* ignore malformed */
     }
   });
 
-  ws.on("close", () => ptyProcess.kill());
-  ws.on("error", () => ptyProcess.kill());
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    ptyProcess.kill();
+  };
+  ws.on("close", cleanup);
+  ws.on("error", cleanup);
 }

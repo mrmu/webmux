@@ -47,6 +47,94 @@ export default function TerminalView({
     if (windows.length === 0) return;
 
     let cancelled = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let terminal: any = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let fitAddon: any = null;
+    let ws: WebSocket | null = null;
+    let pingTimer: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastPong = Date.now();
+    let reconnectAttempts = 0;
+
+    const wsUrl = () => {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT;
+      const wsHost = wsPort
+        ? `${location.hostname}:${wsPort}`
+        : location.host;
+      return `${proto}//${wsHost}/ws/terminal/${sessionName}/${activeWindow}`;
+    };
+
+    function connect() {
+      if (cancelled) return;
+      ws = new WebSocket(wsUrl());
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        lastPong = Date.now();
+        if (ws && terminal) {
+          ws.send(
+            JSON.stringify({
+              type: "resize",
+              cols: terminal.cols,
+              rows: terminal.rows,
+            })
+          );
+        }
+        // App-level heartbeat: probe every 25s; if no pong in 60s the
+        // connection is stale — force close so onclose triggers reconnect.
+        pingTimer = setInterval(() => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          if (Date.now() - lastPong > 60000) {
+            try { ws.close(); } catch { /* ignore */ }
+            return;
+          }
+          try { ws.send(JSON.stringify({ type: "ping" })); } catch { /* ignore */ }
+        }, 25000);
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "output") {
+            terminal?.write(msg.data);
+          } else if (msg.type === "pong") {
+            lastPong = Date.now();
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onclose = () => {
+        if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+        if (cancelled) return;
+        // Exponential backoff, capped at 10s.
+        const delay = Math.min(500 * Math.pow(2, reconnectAttempts), 10000);
+        reconnectAttempts++;
+        reconnectTimer = setTimeout(() => {
+          if (!cancelled) connect();
+        }, delay);
+      };
+    }
+
+    // Force a quick liveness check when the tab/page becomes visible again.
+    // Browsers often suspend timers while hidden, so the heartbeat may not
+    // have fired in time to catch a connection killed during the idle period.
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!ws) return;
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const probeStart = Date.now();
+      try { ws.send(JSON.stringify({ type: "ping" })); } catch { /* ignore */ }
+      setTimeout(() => {
+        if (cancelled || !ws) return;
+        if (lastPong < probeStart && ws.readyState === WebSocket.OPEN) {
+          try { ws.close(); } catch { /* ignore */ }
+        }
+      }, 3000);
+    };
 
     async function initTerminal() {
       const { Terminal } = await import("@xterm/xterm");
@@ -57,7 +145,7 @@ export default function TerminalView({
       // Clear previous terminal
       containerRef.current.innerHTML = "";
 
-      const terminal = new Terminal({
+      terminal = new Terminal({
         theme: {
           background: "#0c0c0c",
           foreground: "#e0e0e0",
@@ -70,56 +158,20 @@ export default function TerminalView({
         scrollback: 10000,
       });
 
-      const fitAddon = new FitAddon();
+      fitAddon = new FitAddon();
       terminal.loadAddon(fitAddon);
       terminal.open(containerRef.current);
       setTimeout(() => fitAddon.fit(), 50);
 
-      // Connect WebSocket with window index
-      // Dev: terminal WS on separate port (3001); Prod: same host
-      const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const wsPort = process.env.NEXT_PUBLIC_WS_PORT;
-      const wsHost = wsPort
-        ? `${location.hostname}:${wsPort}`
-        : location.host;
-      const ws = new WebSocket(
-        `${proto}//${wsHost}/ws/terminal/${sessionName}/${activeWindow}`
-      );
-
-      ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            type: "resize",
-            cols: terminal.cols,
-            rows: terminal.rows,
-          })
-        );
-      };
-
-      ws.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "output") {
-            terminal.write(msg.data);
-          }
-        } catch {
-          /* ignore */
-        }
-      };
-
-      ws.onclose = () => {
-        terminal.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
-      };
-
-      terminal.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
+      terminal.onData((data: string) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "input", data }));
         }
       });
 
       const resizeObserver = new ResizeObserver(() => {
-        fitAddon.fit();
-        if (ws.readyState === WebSocket.OPEN) {
+        fitAddon?.fit();
+        if (ws && ws.readyState === WebSocket.OPEN && terminal) {
           ws.send(
             JSON.stringify({
               type: "resize",
@@ -131,10 +183,20 @@ export default function TerminalView({
       });
       resizeObserver.observe(containerRef.current);
 
+      document.addEventListener("visibilitychange", onVisibility);
+
+      connect();
+
       cleanupRef.current = () => {
+        document.removeEventListener("visibilitychange", onVisibility);
         resizeObserver.disconnect();
-        ws.close();
-        terminal.dispose();
+        if (pingTimer) clearInterval(pingTimer);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (ws) {
+          ws.onclose = null;
+          try { ws.close(); } catch { /* ignore */ }
+        }
+        terminal?.dispose();
       };
     }
 
