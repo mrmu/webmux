@@ -32,7 +32,8 @@ model Project {
   color       String   @default("#6366f1")
   cwd            String   @default("")
   command        String   @default("")
-  jsonlSessionId String   @default("") @map("jsonl_session_id")
+  jsonlSessionId     String  @default("") @map("jsonl_session_id")
+  jsonlSessionPinned Boolean @default(false) @map("jsonl_session_pinned")
   repoUrl        String   @default("") @map("repo_url")    // GitHub/Bitbucket URL
   repoToken      String   @default("") @map("repo_token")  // PAT for API access
   createdAt   DateTime @default(now()) @map("created_at")

@@ -14,6 +14,35 @@ interface ChatMessage {
   is_error?: boolean;
 }
 
+interface SessionEntry {
+  sessionId: string;
+  mtime: number;
+  preview: string;
+  active: boolean;
+  tmuxActive: boolean;
+}
+
+interface SessionsResponse {
+  sessions: SessionEntry[];
+  pinned: boolean;
+  activeSessionId: string;
+  tmuxSessionId: string;
+}
+
+function formatMtime(ms: number): string {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay)
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function shortId(id: string): string {
+  return id.slice(0, 8);
+}
+
 function esc(str: string): string {
   const div = document.createElement("div");
   div.textContent = str || "";
@@ -114,17 +143,35 @@ export default function ChatView({
   // Entries are dropped once the real message appears in `messages`.
   const [pendingUserTexts, setPendingUserTexts] = useState<string[]>([]);
   const [input, setInput] = useState("");
+  const [sessionInfo, setSessionInfo] = useState<SessionsResponse | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Bumped on pin/unpin to force the SSE stream to reconnect — otherwise the
+  // server-side 3s polling interval delays the switch by up to 3 seconds
+  // and stale events from the old session can flash through.
+  const [streamEpoch, setStreamEpoch] = useState(0);
   const messagesRef = useRef<HTMLDivElement>(null);
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
   // Set on send to force scroll-to-bottom even when the user was scrolled up.
   const forceScrollRef = useRef(false);
 
+  const loadSessions = useCallback(async () => {
+    try {
+      const data: SessionsResponse = await api.get(
+        `/api/sessions/${sessionName}/chat-sessions`
+      );
+      setSessionInfo(data);
+    } catch {
+      /* ignore */
+    }
+  }, [sessionName]);
+
   // Clear and reload when switching projects (or mounting — this also covers
   // page refresh, where we always want to jump to the latest message).
   useEffect(() => {
     setMessages([]);
     setPendingUserTexts([]);
+    loadSessions();
     (async () => {
       try {
         const res = await fetch(`/api/sessions/${sessionName}/chat`);
@@ -137,7 +184,7 @@ export default function ChatView({
         setMessages(data.messages || []);
       } catch { /* SSE will pick up */ }
     })();
-  }, [sessionName]);
+  }, [sessionName, loadSessions]);
 
   // Drop optimistic entries whose text has landed in the real log,
   // then apply the latest messages (buffering if user is selecting text).
@@ -164,10 +211,16 @@ export default function ChatView({
       `/api/sessions/${sessionName}/chat-stream`
     );
 
+    let lastSessionId = "";
     eventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
         applyLatestMessages(data.messages || []);
+        // Session switched server-side — refresh picker badges
+        if (data.sessionId && data.sessionId !== lastSessionId) {
+          lastSessionId = data.sessionId;
+          loadSessions();
+        }
       } catch {
         /* ignore parse errors */
       }
@@ -178,7 +231,18 @@ export default function ChatView({
     };
 
     return () => eventSource.close();
-  }, [sessionName, applyLatestMessages]);
+  }, [sessionName, applyLatestMessages, loadSessions, streamEpoch]);
+
+  const reloadMessages = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionName}/chat`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setMessages(data.messages || []);
+    } catch {
+      /* SSE will pick up */
+    }
+  }, [sessionName]);
 
   // Mobile screen-off can leave the SSE connection in a "sleeping" state —
   // radio suspends, events queue up in the kernel TCP buffer, and the browser
@@ -198,6 +262,37 @@ export default function ChatView({
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [sessionName, applyLatestMessages]);
+
+  // After a session switch, jump to the latest message — ignore the usual
+  // "only scroll if near bottom" check, which is meaningless across sessions.
+  const scrollToBottomRef = useRef(false);
+
+  const pickSession = async (id: string) => {
+    try {
+      await api.put(`/api/sessions/${sessionName}/chat-sessions`, { sessionId: id });
+      setPickerOpen(false);
+      setMessages([]);
+      scrollToBottomRef.current = true;
+      await reloadMessages();
+      setStreamEpoch((v) => v + 1);
+      loadSessions();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const unpinSession = async () => {
+    try {
+      await api.put(`/api/sessions/${sessionName}/chat-sessions`, { unpin: true });
+      setMessages([]);
+      scrollToBottomRef.current = true;
+      await reloadMessages();
+      setStreamEpoch((v) => v + 1);
+      loadSessions();
+    } catch {
+      /* ignore */
+    }
+  };
 
   // Flush buffered update after selection ends
   useEffect(() => {
@@ -226,6 +321,11 @@ export default function ChatView({
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
+    if (scrollToBottomRef.current) {
+      scrollToBottomRef.current = false;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
     if (forceScrollRef.current || isAtBottom) {
       el.scrollTop = el.scrollHeight;
@@ -308,13 +408,93 @@ export default function ChatView({
     }
   };
 
+  const active = sessionInfo?.sessions.find((s) => s.active);
+  const activeMode: "pinned" | "tmux" | "latest" = sessionInfo?.pinned
+    ? "pinned"
+    : active?.tmuxActive
+      ? "tmux"
+      : "latest";
+  const activeIcon = activeMode === "pinned" ? "📌" : activeMode === "tmux" ? "🖥" : "⏱";
+  const activeLabel = activeMode === "pinned" ? "pinned" : activeMode === "tmux" ? "tmux" : "latest";
+
+  // Viewing a session that's NOT what tmux's claude is writing to — anything
+  // you send via the input goes to tmux's current session, NOT the one on
+  // screen. That's a UX trap, so we show a warning and offer a one-click
+  // jump to the session tmux is actually running.
+  const tmuxMismatch =
+    !!sessionInfo?.tmuxSessionId &&
+    !!sessionInfo?.activeSessionId &&
+    sessionInfo.tmuxSessionId !== sessionInfo.activeSessionId;
+
   return (
     <div className="view-panel chat-view">
+      {sessionInfo && sessionInfo.sessions.length > 0 && (
+        <div className="chat-session-bar">
+          <button
+            className="chat-session-trigger"
+            onClick={() => setPickerOpen((v) => !v)}
+            title="Switch chat session"
+          >
+            <span className="chat-session-icon">{activeIcon}</span>
+            <span className="chat-session-code">
+              {active ? shortId(active.sessionId) : "—"}
+            </span>
+            <span className="chat-session-mode">{activeLabel}</span>
+            <span className="chat-session-caret">{pickerOpen ? "▲" : "▼"}</span>
+          </button>
+          {sessionInfo.pinned && (
+            <button
+              className="chat-session-unpin"
+              onClick={unpinSession}
+              title="Unpin — resume auto-follow"
+            >
+              unpin
+            </button>
+          )}
+          {pickerOpen && (
+            <div className="chat-session-dropdown">
+              {sessionInfo.sessions.map((s) => (
+                <button
+                  key={s.sessionId}
+                  className={`chat-session-option${s.active ? " active" : ""}`}
+                  onClick={() => pickSession(s.sessionId)}
+                >
+                  <div className="chat-session-option-head">
+                    {s.tmuxActive && <span title="Running in tmux">🖥</span>}
+                    {s.active && sessionInfo.pinned && <span title="Pinned">📌</span>}
+                    {s.active && !sessionInfo.pinned && <span title="Showing">●</span>}
+                    <span className="chat-session-option-id">{shortId(s.sessionId)}</span>
+                    <span className="chat-session-option-time">{formatMtime(s.mtime)}</span>
+                  </div>
+                  {s.preview && (
+                    <div className="chat-session-option-preview">{s.preview}</div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <MessageList messages={displayMessages} innerRef={messagesRef} />
 
       {/* Chat Input — always visible */}
       {(
         <div className="chat-input-area">
+          {tmuxMismatch && (
+            <div className="chat-mismatch-warn">
+              <span>
+                看的是 <code>{shortId(sessionInfo!.activeSessionId)}</code>，但 terminal 跑的是{" "}
+                <code>{shortId(sessionInfo!.tmuxSessionId)}</code>。訊息送出會進入 terminal 的 session。
+              </span>
+              <button
+                className="chat-mismatch-jump"
+                onClick={() => pickSession(sessionInfo!.tmuxSessionId)}
+              >
+                切到 🖥
+              </button>
+            </div>
+          )}
           {sendError && (
             <div className="chat-send-error">{sendError}</div>
           )}

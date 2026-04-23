@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
 import { getProjectCwd } from "@/lib/project-cwd";
-import { listSessionJsonls, parseJsonlMessages } from "@/lib/jsonl-parser";
+import { parseJsonlMessages } from "@/lib/jsonl-parser";
+import { resolveChatSession } from "@/lib/chat-session-resolver";
 import fs from "fs";
 
 /**
- * SSE endpoint: streams chat messages from the latest JSONL file.
- * Always tracks the most recent Claude Code session (by mtime).
- * When Claude restarts (new JSONL), automatically switches to it.
+ * SSE stream of chat messages. Every 3s it re-resolves which JSONL to follow
+ * (respecting pin / tmux-detect / latest-mtime). When the resolved session
+ * changes, it switches the file watcher to the new file.
  */
 export async function GET(
   request: NextRequest,
@@ -19,19 +19,13 @@ export async function GET(
 
   const { name } = await params;
   const cwd = await getProjectCwd(name);
-  if (!cwd) {
-    return new Response("Project not found", { status: 404 });
-  }
+  if (!cwd) return new Response("Project not found", { status: 404 });
 
   const encoder = new TextEncoder();
   let closed = false;
   let jsonlPath: string | null = null;
+  let currentSessionId = "";
   let watcher: fs.FSWatcher | null = null;
-
-  function findLatestJsonl(): { path: string; sessionId: string } | null {
-    const sessions = listSessionJsonls(cwd!);
-    return sessions.length > 0 ? sessions[0] : null;
-  }
 
   const stream = new ReadableStream({
     start(controller) {
@@ -48,7 +42,13 @@ export async function GET(
         if (!jsonlPath || closed) return;
         try {
           const messages = parseJsonlMessages(jsonlPath);
-          sendEvent(JSON.stringify({ messages, source: "jsonl" }));
+          sendEvent(
+            JSON.stringify({
+              messages,
+              source: "jsonl",
+              sessionId: currentSessionId,
+            })
+          );
         } catch {
           /* ignore */
         }
@@ -64,36 +64,35 @@ export async function GET(
         watcher.on("error", () => {});
       }
 
-      // Initial: find latest JSONL
-      const latest = findLatestJsonl();
-      if (latest) {
-        jsonlPath = latest.path;
-        // Update DB
-        prisma.project
-          .update({ where: { name }, data: { jsonlSessionId: latest.sessionId } })
-          .catch(() => {});
-        sendMessages();
-        watchFile(jsonlPath);
-      }
-
-      // Check for new JSONL files every 3 seconds (claude restart)
-      const checkInterval = setInterval(() => {
-        if (closed) { clearInterval(checkInterval); return; }
-        const latest = findLatestJsonl();
-        if (latest && latest.path !== jsonlPath) {
-          // New session detected — switch to it
-          jsonlPath = latest.path;
-          prisma.project
-            .update({ where: { name }, data: { jsonlSessionId: latest.sessionId } })
-            .catch(() => {});
+      async function syncResolved() {
+        const resolved = await resolveChatSession(name, cwd!);
+        if (!resolved) return;
+        if (resolved.path !== jsonlPath) {
+          jsonlPath = resolved.path;
+          currentSessionId = resolved.sessionId;
           sendMessages();
           watchFile(jsonlPath);
         }
+      }
+
+      // Initial resolve
+      syncResolved();
+
+      // Re-resolve periodically — catches tmux switching to a new claude,
+      // user pinning/unpinning, and new files appearing.
+      const checkInterval = setInterval(() => {
+        if (closed) {
+          clearInterval(checkInterval);
+          return;
+        }
+        syncResolved();
       }, 3000);
 
-      // Keepalive
       const keepalive = setInterval(() => {
-        if (closed) { clearInterval(keepalive); return; }
+        if (closed) {
+          clearInterval(keepalive);
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(": ping\n\n"));
         } catch {
@@ -101,13 +100,16 @@ export async function GET(
         }
       }, 30000);
 
-      // Cleanup
       request.signal.addEventListener("abort", () => {
         closed = true;
         if (watcher) watcher.close();
         clearInterval(checkInterval);
         clearInterval(keepalive);
-        try { controller.close(); } catch { /* already closed */ }
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
       });
     },
   });

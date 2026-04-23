@@ -50,6 +50,54 @@ export function findSessionJsonlById(
 }
 
 /**
+ * Read the last user or assistant text line from a JSONL, trimmed to `max`
+ * characters. Used to give each session in the picker a recognizable preview.
+ * Reads only the tail of the file for speed.
+ */
+export function getSessionPreview(filePath: string, max = 80): string {
+  try {
+    const stat = fs.statSync(filePath);
+    // Read up to 200KB from the tail — tool-heavy sessions can have tens of KB
+    // between consecutive user/assistant text blocks.
+    const readBytes = Math.min(stat.size, 200_000);
+    const buf = Buffer.alloc(readBytes);
+    const fd = fs.openSync(filePath, "r");
+    fs.readSync(fd, buf, 0, readBytes, stat.size - readBytes);
+    fs.closeSync(fd);
+    const lines = buf.toString("utf-8").split("\n").filter(Boolean);
+    // Walk backwards looking for a user or assistant text message
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const entry = JSON.parse(lines[i]);
+        if (entry.type !== "user" && entry.type !== "assistant") continue;
+        const content = entry.message?.content;
+        let text = "";
+        if (typeof content === "string") {
+          text = content;
+        } else if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block && typeof block === "object" && block.type === "text" && block.text) {
+              text = block.text;
+              break;
+            }
+          }
+        }
+        text = text.replace(RE_ANSI, "").replace(/\s+/g, " ").trim();
+        // Skip system-reminder wrapped text
+        if (/<(system-reminder|local-command|command-name|bash-input)/.test(text)) continue;
+        if (!text) continue;
+        return text.length > max ? text.slice(0, max) + "…" : text;
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    /* unreadable */
+  }
+  return "";
+}
+
+/**
  * List all JSONL sessions for a project, sorted by most recent.
  */
 export function listSessionJsonls(
