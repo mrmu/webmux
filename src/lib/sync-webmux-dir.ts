@@ -184,22 +184,71 @@ function tryReadFile(filePath: string): string {
   catch { return ""; }
 }
 
-/** Single source of truth for what "has a webmux pointer" means in CLAUDE.md. */
-export function hasWebmuxPointer(claudeMdContent: string): boolean {
-  return /\.webmux\//.test(claudeMdContent);
+/** Single source of truth for what "has a webmux pointer" means in any agent file. */
+export function hasWebmuxPointer(content: string): boolean {
+  return /\.webmux\//.test(content);
 }
 
-/** The pointer block we append to CLAUDE.md / AGENTS.md / etc. */
+/** The pointer block we append to CLAUDE.md / AGENTS.md / etc. The "re-read"
+ *  wording is deliberate — the files are DB-backed and can change via the
+ *  webmux UI between turns, so agents must not rely on earlier snapshots. */
 export const WEBMUX_POINTER_BLOCK = [
   "",
   "## Project Settings (managed by webmux)",
   "",
-  "Project-level configuration lives in [`.webmux/`](.webmux/). Consult these",
-  "files when reasoning about hosts, deployment, or verification:",
+  "Project-level configuration lives in [`.webmux/`](.webmux/).",
+  "**Before deploying, testing, or reasoning about hosts, re-read these",
+  "files** — they may have been updated via the webmux UI since you last",
+  "loaded them. Do not rely on earlier snapshots.",
   "",
-  "- [`.webmux/project.md`](.webmux/project.md) — project overview",
+  "- [`.webmux/project.md`](.webmux/project.md) — project overview (auto)",
   "- [`.webmux/hosts.md`](.webmux/hosts.md) — deployment hosts (auto)",
   "- [`.webmux/deploy.md`](.webmux/deploy.md) — deployment steps",
   "- [`.webmux/test.md`](.webmux/test.md) — test / verification procedures",
   "",
 ].join("\n");
+
+/** Well-known agent-context filenames webmux can manage pointers in.
+ *  Each is plain markdown so the pointer block appends cleanly. */
+export const AGENT_POINTER_TARGETS = [
+  { filename: "CLAUDE.md", agent: "Claude Code" },
+  { filename: "AGENTS.md", agent: "OpenAI Codex" },
+] as const;
+
+export function readPointerStatus(cwd: string, filename: string): {
+  filename: string;
+  exists: boolean;
+  hasPointer: boolean;
+} {
+  const p = path.join(cwd, filename);
+  try {
+    const content = fs.readFileSync(p, "utf-8");
+    return { filename, exists: true, hasPointer: hasWebmuxPointer(content) };
+  } catch {
+    return { filename, exists: false, hasPointer: false };
+  }
+}
+
+/** Idempotently ensure the pointer block is present in `{cwd}/{filename}`.
+ *  Creates the file (and any parent dirs) if missing. */
+export function ensurePointer(cwd: string, filename: string): {
+  ok: boolean;
+  alreadyPresent: boolean;
+  created: boolean;
+} {
+  const p = path.join(cwd, filename);
+  let existing = "";
+  let created = false;
+  try {
+    existing = fs.readFileSync(p, "utf-8");
+  } catch {
+    created = true;
+  }
+  if (hasWebmuxPointer(existing)) {
+    return { ok: true, alreadyPresent: true, created: false };
+  }
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const separator = existing && !existing.endsWith("\n") ? "\n" : "";
+  fs.writeFileSync(p, existing + separator + WEBMUX_POINTER_BLOCK, "utf-8");
+  return { ok: true, alreadyPresent: false, created };
+}

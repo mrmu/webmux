@@ -49,15 +49,22 @@ export default function ProjectSettings({
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
 
-  // CLAUDE.md status
+  // CLAUDE.md deploy-section scan (pointer status lives in agentPointers)
   const [claudeMd, setClaudeMd] = useState<{
     exists: boolean;
     hasDeploy: boolean;
-    hasWebmuxPointer: boolean;
     deploySections: { title: string; body: string }[];
     allSections: string[];
   } | null>(null);
-  const [pointerBusy, setPointerBusy] = useState(false);
+
+  // Multi-agent pointer status (CLAUDE.md, AGENTS.md, …)
+  const [agentPointers, setAgentPointers] = useState<{
+    filename: string;
+    agent: string;
+    exists: boolean;
+    hasPointer: boolean;
+  }[]>([]);
+  const [pointerBusyFor, setPointerBusyFor] = useState<string | null>(null);
 
   const loadProject = useCallback(async () => {
     try {
@@ -101,12 +108,20 @@ export default function ProjectSettings({
     } catch { setClaudeMd(null); }
   }, [projectName]);
 
+  const loadAgentPointers = useCallback(async () => {
+    try {
+      const data = await api.get(`/api/sessions/${projectName}/agent-pointers`);
+      setAgentPointers(data.targets || []);
+    } catch { setAgentPointers([]); }
+  }, [projectName]);
+
   useEffect(() => {
     loadProject();
     loadHosts();
     loadChatSessions();
     loadClaudeMd();
-  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd]);
+    loadAgentPointers();
+  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers]);
 
   const saveProject = async () => {
     setSaving(true);
@@ -154,13 +169,30 @@ export default function ProjectSettings({
     loadChatSessions();
   };
 
-  const addWebmuxPointer = async () => {
-    setPointerBusy(true);
+  const addPointer = async (filename: string) => {
+    setPointerBusyFor(filename);
     try {
-      await api.post(`/api/sessions/${projectName}/claudemd`, {});
+      await api.post(`/api/sessions/${projectName}/agent-pointers`, {
+        targets: [filename],
+      });
+      await loadAgentPointers();
+      if (filename === "CLAUDE.md") await loadClaudeMd();
+    } catch { /* ignore */ }
+    setPointerBusyFor(null);
+  };
+
+  const addAllMissingPointers = async () => {
+    const missing = agentPointers.filter((p) => !p.hasPointer).map((p) => p.filename);
+    if (missing.length === 0) return;
+    setPointerBusyFor("*");
+    try {
+      await api.post(`/api/sessions/${projectName}/agent-pointers`, {
+        targets: missing,
+      });
+      await loadAgentPointers();
       await loadClaudeMd();
     } catch { /* ignore */ }
-    setPointerBusy(false);
+    setPointerBusyFor(null);
   };
 
   const deleteProject = async () => {
@@ -315,66 +347,88 @@ export default function ProjectSettings({
           </div>
         </section>
 
-        {/* CLAUDE.md Status */}
+        {/* Agent Integration — pointers in CLAUDE.md, AGENTS.md, ... */}
         <section className="settings-section">
-          <h3>CLAUDE.md</h3>
-          {!claudeMd ? (
-            <p className="settings-hint">Loading...</p>
-          ) : (
-            <>
-              {/* .webmux pointer — shown always so the action is discoverable */}
-              {claudeMd.hasWebmuxPointer ? (
-                <div className="claudemd-status ok">
-                  <span className="claudemd-icon">&#x2705;</span>
-                  <span>CLAUDE.md points to <code>.webmux/</code></span>
-                </div>
-              ) : (
-                <div className="claudemd-status warn">
-                  <span className="claudemd-icon">&#x26A0;</span>
-                  <span style={{ flex: 1 }}>
-                    {claudeMd.exists
-                      ? "CLAUDE.md doesn't reference .webmux/ — agents won't find project settings"
-                      : "No CLAUDE.md yet — adding the pointer will create one"}
+          <h3>
+            Agent Integration
+            {agentPointers.some((p) => !p.hasPointer) && (
+              <button
+                onClick={addAllMissingPointers}
+                disabled={pointerBusyFor !== null}
+                style={{
+                  marginLeft: "0.75rem",
+                  fontSize: "0.8rem",
+                  padding: "0.15rem 0.5rem",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  borderRadius: 4,
+                  background: "transparent",
+                  cursor: "pointer",
+                }}
+                title="Add .webmux/ pointer to every missing target"
+              >
+                {pointerBusyFor === "*" ? "Adding..." : "Add all missing"}
+              </button>
+            )}
+          </h3>
+          <p className="settings-hint">
+            A short <code>.webmux/</code> pointer block tells each agent where
+            to find project context. File is created if missing.
+          </p>
+          <div className="agent-pointer-list">
+            {agentPointers.map((p) => (
+              <div
+                key={p.filename}
+                className={`claudemd-status ${p.hasPointer ? "ok" : "warn"}`}
+                style={{ marginBottom: "0.4rem" }}
+              >
+                <span className="claudemd-icon">{p.hasPointer ? "✅" : "⚠"}</span>
+                <span style={{ flex: 1 }}>
+                  <code>{p.filename}</code>{" "}
+                  <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
+                    ({p.agent})
+                    {!p.exists && " — will be created"}
                   </span>
+                </span>
+                {!p.hasPointer && (
                   <button
                     className="btn-primary"
-                    onClick={addWebmuxPointer}
-                    disabled={pointerBusy}
+                    onClick={() => addPointer(p.filename)}
+                    disabled={pointerBusyFor !== null}
                     style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
                   >
-                    {pointerBusy ? "Adding..." : "Add pointer"}
+                    {pointerBusyFor === p.filename ? "Adding..." : "Add pointer"}
                   </button>
-                </div>
-              )}
-
-              {!claudeMd.exists ? (
-                <p className="settings-hint">No CLAUDE.md found in project directory</p>
-              ) : (
-                <>
-                  <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
-                    <span className="claudemd-icon">{claudeMd.hasDeploy ? "✅" : "⚠"}</span>
-                    <span>
-                      {claudeMd.hasDeploy
-                        ? "Deploy instructions found"
-                        : "No deploy instructions detected"}
-                    </span>
-                  </div>
-                  {claudeMd.allSections.length > 0 && (
-                    <p className="settings-hint">
-                      Sections: {claudeMd.allSections.join(", ")}
-                    </p>
-                  )}
-                  {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
-                    <details key={i} className="claudemd-deploy-section">
-                      <summary>{s.title}</summary>
-                      <pre>{s.body}</pre>
-                    </details>
-                  ))}
-                </>
-              )}
-            </>
-          )}
+                )}
+              </div>
+            ))}
+          </div>
         </section>
+
+        {/* CLAUDE.md deploy-section scan (informational only) */}
+        {claudeMd?.exists && (
+          <section className="settings-section">
+            <h3>CLAUDE.md scan</h3>
+            <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
+              <span className="claudemd-icon">{claudeMd.hasDeploy ? "✅" : "⚠"}</span>
+              <span>
+                {claudeMd.hasDeploy
+                  ? "Deploy instructions found"
+                  : "No deploy instructions detected"}
+              </span>
+            </div>
+            {claudeMd.allSections.length > 0 && (
+              <p className="settings-hint">
+                Sections: {claudeMd.allSections.join(", ")}
+              </p>
+            )}
+            {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
+              <details key={i} className="claudemd-deploy-section">
+                <summary>{s.title}</summary>
+                <pre>{s.body}</pre>
+              </details>
+            ))}
+          </section>
+        )}
 
         {/* Chat Session */}
         {chatSessions.length > 1 && (
