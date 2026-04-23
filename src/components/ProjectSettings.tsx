@@ -50,9 +50,11 @@ export default function ProjectSettings({
   const [claudeMd, setClaudeMd] = useState<{
     exists: boolean;
     hasDeploy: boolean;
+    hasWebmuxPointer: boolean;
     deploySections: { title: string; body: string }[];
     allSections: string[];
   } | null>(null);
+  const [pointerBusy, setPointerBusy] = useState(false);
 
   const loadProject = useCallback(async () => {
     try {
@@ -133,6 +135,15 @@ export default function ProjectSettings({
   const selectChatSession = async (sessionId: string) => {
     await api.put(`/api/sessions/${projectName}/chat-sessions`, { sessionId });
     loadChatSessions();
+  };
+
+  const addWebmuxPointer = async () => {
+    setPointerBusy(true);
+    try {
+      await api.post(`/api/sessions/${projectName}/claudemd`, {});
+      await loadClaudeMd();
+    } catch { /* ignore */ }
+    setPointerBusy(false);
   };
 
   const deleteProject = async () => {
@@ -234,32 +245,58 @@ export default function ProjectSettings({
           <h3>CLAUDE.md</h3>
           {!claudeMd ? (
             <p className="settings-hint">Loading...</p>
-          ) : !claudeMd.exists ? (
-            <div className="claudemd-status missing">
-              <span className="claudemd-icon">&#x26A0;</span>
-              <span>No CLAUDE.md found in project directory</span>
-            </div>
           ) : (
             <>
-              <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
-                <span className="claudemd-icon">{claudeMd.hasDeploy ? "&#x2705;" : "&#x26A0;"}</span>
-                <span>
-                  {claudeMd.hasDeploy
-                    ? "Deploy instructions found"
-                    : "No deploy instructions detected"}
-                </span>
-              </div>
-              {claudeMd.allSections.length > 0 && (
-                <p className="settings-hint">
-                  Sections: {claudeMd.allSections.join(", ")}
-                </p>
+              {/* .webmux pointer — shown always so the action is discoverable */}
+              {claudeMd.hasWebmuxPointer ? (
+                <div className="claudemd-status ok">
+                  <span className="claudemd-icon">&#x2705;</span>
+                  <span>CLAUDE.md points to <code>.webmux/</code></span>
+                </div>
+              ) : (
+                <div className="claudemd-status warn">
+                  <span className="claudemd-icon">&#x26A0;</span>
+                  <span style={{ flex: 1 }}>
+                    {claudeMd.exists
+                      ? "CLAUDE.md doesn't reference .webmux/ — agents won't find project settings"
+                      : "No CLAUDE.md yet — adding the pointer will create one"}
+                  </span>
+                  <button
+                    className="btn-primary"
+                    onClick={addWebmuxPointer}
+                    disabled={pointerBusy}
+                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
+                  >
+                    {pointerBusy ? "Adding..." : "Add pointer"}
+                  </button>
+                </div>
               )}
-              {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
-                <details key={i} className="claudemd-deploy-section">
-                  <summary>{s.title}</summary>
-                  <pre>{s.body}</pre>
-                </details>
-              ))}
+
+              {!claudeMd.exists ? (
+                <p className="settings-hint">No CLAUDE.md found in project directory</p>
+              ) : (
+                <>
+                  <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
+                    <span className="claudemd-icon">{claudeMd.hasDeploy ? "&#x2705;" : "&#x26A0;"}</span>
+                    <span>
+                      {claudeMd.hasDeploy
+                        ? "Deploy instructions found"
+                        : "No deploy instructions detected"}
+                    </span>
+                  </div>
+                  {claudeMd.allSections.length > 0 && (
+                    <p className="settings-hint">
+                      Sections: {claudeMd.allSections.join(", ")}
+                    </p>
+                  )}
+                  {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
+                    <details key={i} className="claudemd-deploy-section">
+                      <summary>{s.title}</summary>
+                      <pre>{s.body}</pre>
+                    </details>
+                  ))}
+                </>
+              )}
             </>
           )}
         </section>

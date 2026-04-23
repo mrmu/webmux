@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getProjectCwd } from "@/lib/project-cwd";
+import { hasWebmuxPointer, WEBMUX_POINTER_BLOCK } from "@/lib/sync-webmux-dir";
 import fs from "fs";
 import path from "path";
 
@@ -44,19 +45,25 @@ export async function GET(
   const { name } = await params;
   const cwd = await getProjectCwd(name);
   if (!cwd) {
-    return NextResponse.json({ exists: false, hasDeploy: false, sections: [] });
+    return NextResponse.json({
+      exists: false, hasDeploy: false, hasWebmuxPointer: false, sections: [],
+    });
   }
 
   const claudePath = path.join(cwd, "CLAUDE.md");
   if (!fs.existsSync(claudePath)) {
-    return NextResponse.json({ exists: false, hasDeploy: false, sections: [] });
+    return NextResponse.json({
+      exists: false, hasDeploy: false, hasWebmuxPointer: false, sections: [],
+    });
   }
 
   let content: string;
   try {
     content = fs.readFileSync(claudePath, "utf-8");
   } catch {
-    return NextResponse.json({ exists: false, hasDeploy: false, sections: [] });
+    return NextResponse.json({
+      exists: false, hasDeploy: false, hasWebmuxPointer: false, sections: [],
+    });
   }
 
   const sections = extractSections(content);
@@ -70,10 +77,54 @@ export async function GET(
   return NextResponse.json({
     exists: true,
     hasDeploy: deploySections.length > 0,
+    hasWebmuxPointer: hasWebmuxPointer(content),
     deploySections: deploySections.map((s) => ({
       title: s.title,
       body: s.body,
     })),
     allSections: sections.map((s) => s.title),
   });
+}
+
+/** Append the `.webmux/` pointer block to CLAUDE.md (idempotent). */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ name: string }> }
+) {
+  if (!requireAuth(request))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name } = await params;
+  const cwd = await getProjectCwd(name);
+  if (!cwd) {
+    return NextResponse.json(
+      { error: "Project working directory not set" },
+      { status: 404 }
+    );
+  }
+
+  const claudePath = path.join(cwd, "CLAUDE.md");
+  let existing = "";
+  if (fs.existsSync(claudePath)) {
+    try { existing = fs.readFileSync(claudePath, "utf-8"); }
+    catch {
+      return NextResponse.json({ error: "Failed to read CLAUDE.md" }, { status: 500 });
+    }
+  }
+
+  if (hasWebmuxPointer(existing)) {
+    return NextResponse.json({ ok: true, alreadyPresent: true });
+  }
+
+  // Ensure one blank line between prior content and the appended block
+  const separator = existing && !existing.endsWith("\n") ? "\n" : "";
+  const next = existing + separator + WEBMUX_POINTER_BLOCK;
+
+  try {
+    fs.writeFileSync(claudePath, next, "utf-8");
+  } catch {
+    return NextResponse.json({ error: "Failed to write CLAUDE.md" }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, alreadyPresent: false });
 }

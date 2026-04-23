@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidCwd, isValidCommand } from "@/lib/validate";
 import { getProjectsRoot } from "@/lib/settings";
+import { syncWebmuxDir } from "@/lib/sync-webmux-dir";
 
 export async function PUT(
   request: NextRequest,
@@ -53,6 +54,10 @@ export async function PUT(
       repoToken: body.repo_token || "",
     },
   });
+
+  // Regenerate `.webmux/` whenever project metadata changes (esp. first-time
+  // cwd set creates the dir and seeds user files).
+  await syncWebmuxDir(name);
 
   return NextResponse.json({ ok: true });
 }

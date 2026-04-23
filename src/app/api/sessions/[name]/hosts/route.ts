@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncHostsFile } from "@/lib/sync-hosts-file";
+import { syncWebmuxDir } from "@/lib/sync-webmux-dir";
 
 export async function GET(
   request: NextRequest,
@@ -51,8 +51,7 @@ export async function POST(
     },
   });
 
-  // Sync hosts file for Claude Code
-  await syncHostsFile(name);
+  await syncWebmuxDir(name);
 
   return NextResponse.json(host);
 }
