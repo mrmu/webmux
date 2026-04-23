@@ -183,6 +183,22 @@ export default function TerminalView({
       });
       resizeObserver.observe(containerRef.current);
 
+      // The parent hides inactive views with display:none rather than
+      // unmounting, so xterm's canvas can end up blank when we switch back —
+      // ResizeObserver fires the size change, but xterm doesn't repaint its
+      // buffer on its own. Force a redraw whenever the container becomes
+      // visible again.
+      let wasVisible = false;
+      const intersectionObserver = new IntersectionObserver((entries) => {
+        const visible = entries.some((e) => e.isIntersecting);
+        if (visible && !wasVisible) {
+          fitAddon?.fit();
+          if (terminal) terminal.refresh(0, terminal.rows - 1);
+        }
+        wasVisible = visible;
+      });
+      intersectionObserver.observe(containerRef.current);
+
       document.addEventListener("visibilitychange", onVisibility);
 
       connect();
@@ -190,6 +206,7 @@ export default function TerminalView({
       cleanupRef.current = () => {
         document.removeEventListener("visibilitychange", onVisibility);
         resizeObserver.disconnect();
+        intersectionObserver.disconnect();
         if (pingTimer) clearInterval(pingTimer);
         if (reconnectTimer) clearTimeout(reconnectTimer);
         if (ws) {
@@ -275,9 +292,6 @@ export default function TerminalView({
         <button
           className="terminal-claude-btn"
           onClick={() => {
-            // Send claude command to the current tmux window via PTY
-            const ws = cleanupRef.current;
-            // Can't access ws directly, use API instead
             api.post(`/api/sessions/${sessionName}/send`, {
               text: "claude --dangerously-skip-permissions",
             }).catch(() => {});
