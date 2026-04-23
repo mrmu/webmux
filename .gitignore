@@ -40,3 +40,6 @@ prisma/*.db
 refs/
 data/
 src/generated/
+
+# claude code runtime state
+.claude/scheduled_tasks.lock
