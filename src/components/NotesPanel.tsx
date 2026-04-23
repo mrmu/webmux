@@ -29,6 +29,9 @@ export default function NotesPanel({
 }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [input, setInput] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -56,8 +59,37 @@ export default function NotesPanel({
   };
 
   const deleteNote = async (id: number) => {
+    if (!confirm("Delete this note?")) return;
     await api.del(`/api/notes/${id}`);
     loadNotes();
+  };
+
+  const startEdit = (n: Note) => {
+    setEditingId(n.id);
+    setEditDraft(n.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft("");
+  };
+
+  const saveEdit = async (id: number) => {
+    const content = editDraft;
+    if (content === notes.find((n) => n.id === id)?.content) {
+      cancelEdit();
+      return;
+    }
+    setSavingId(id);
+    try {
+      await api.put(`/api/notes/${id}`, { content });
+      await loadNotes();
+      setEditingId(null);
+      setEditDraft("");
+    } catch {
+      /* ignore — leave edit mode open so user can retry */
+    }
+    setSavingId(null);
   };
 
   return (
@@ -74,20 +106,72 @@ export default function NotesPanel({
             <p>No notes yet</p>
           </div>
         ) : (
-          notes.map((n) => (
-            <div key={n.id} className="note-card">
-              <div className="note-content">{n.content}</div>
-              <div className="note-meta">
-                <span>{formatTime(n.updated_at)}</span>
-                <button
-                  className="note-delete"
-                  onClick={() => deleteNote(n.id)}
-                >
-                  Delete
-                </button>
+          notes.map((n) => {
+            const editing = editingId === n.id;
+            return (
+              <div key={n.id} className="note-card">
+                {editing ? (
+                  <textarea
+                    className="note-input"
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    rows={Math.max(2, editDraft.split("\n").length)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") cancelEdit();
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) saveEdit(n.id);
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="note-content"
+                    onDoubleClick={() => startEdit(n)}
+                    title="Double-click to edit"
+                  >
+                    {n.content}
+                  </div>
+                )}
+                <div className="note-meta">
+                  <span>{formatTime(n.updated_at)}</span>
+                  <span style={{ flex: 1 }} />
+                  {editing ? (
+                    <>
+                      <button
+                        className="note-delete"
+                        onClick={cancelEdit}
+                        disabled={savingId === n.id}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="note-delete"
+                        onClick={() => saveEdit(n.id)}
+                        disabled={savingId === n.id}
+                        style={{ color: "var(--accent)" }}
+                      >
+                        {savingId === n.id ? "Saving..." : "Save"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="note-delete"
+                        onClick={() => startEdit(n)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="note-delete"
+                        onClick={() => deleteNote(n.id)}
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
       <div className="notes-input-area">
