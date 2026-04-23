@@ -7,12 +7,17 @@ import { getSetting } from "./settings";
  * Sync project metadata from DB to `{cwd}/.webmux/` so AI agents (Claude Code,
  * Codex, Cursor, …) can pick up project context in a vendor-neutral location.
  *
- * Files:
- *  - README.md   auto — index + agent pointer
- *  - project.md  auto — project overview
- *  - hosts.md    auto — deployment hosts
- *  - deploy.md   user — seeded if missing, never overwritten
- *  - test.md     user — seeded if missing, never overwritten
+ * DB is source of truth. Every file in `.webmux/` maps to a column:
+ *  - README.md   derived from code (static boilerplate)
+ *  - project.md  derived from Project row (name, cwd, deployment status)
+ *  - hosts.md    derived from Host rows
+ *  - deploy.md   Project.deployDoc
+ *  - test.md     Project.testDoc
+ *
+ * Migration: the first sync after this refactor will find existing deploy.md /
+ * test.md files (left by the previous "seed once, never overwrite" version)
+ * and import their content into the DB columns if those columns are empty.
+ * After that, files are regenerated from DB on every sync.
  *
  * Also cleans up the legacy `.claude/webmux-hosts.md` from when webmux wrote
  * into Claude Code's own namespace.
@@ -137,55 +142,46 @@ export async function syncWebmuxDir(projectName: string): Promise<void> {
   }
   writeAuto(path.join(dir, "hosts.md"), hostLines.join("\n"));
 
-  // deploy.md / test.md — seed once, never overwrite
-  seedUser(
-    path.join(dir, "deploy.md"),
-    [
-      "# Deployment",
-      "",
-      "<!--",
-      "  User-editable. webmux will not overwrite this file.",
-      "  Document how to deploy this project to each environment.",
-      "-->",
-      "",
-      "## Steps",
-      "",
-      "- [ ] ",
-      "",
-    ].join("\n")
-  );
+  // deploy.md / test.md — DB is source of truth. If DB is empty but a file
+  // exists (e.g. from the previous "seed once" version), import the file
+  // content into DB so we don't lose hand-edits during this migration.
+  const deployPath = path.join(dir, "deploy.md");
+  const testPath = path.join(dir, "test.md");
+  let deployDoc = project.deployDoc;
+  let testDoc = project.testDoc;
 
-  seedUser(
-    path.join(dir, "test.md"),
-    [
-      "# Test & Verification",
-      "",
-      "<!--",
-      "  User-editable. webmux will not overwrite this file.",
-      "  Document how to test and verify this project before/after deployment.",
-      "-->",
-      "",
-      "## Before deploying",
-      "",
-      "- [ ] ",
-      "",
-      "## After deploying",
-      "",
-      "- [ ] ",
-      "",
-    ].join("\n")
-  );
+  if (!deployDoc) {
+    const imported = tryReadFile(deployPath);
+    if (imported.trim()) deployDoc = imported;
+  }
+  if (!testDoc) {
+    const imported = tryReadFile(testPath);
+    if (imported.trim()) testDoc = imported;
+  }
+  if (deployDoc !== project.deployDoc || testDoc !== project.testDoc) {
+    await prisma.project.update({
+      where: { name: projectName },
+      data: { deployDoc, testDoc },
+    }).catch(() => { /* ignore — next sync will retry */ });
+  }
+
+  writeAuto(deployPath, deployDoc || DEPLOY_PLACEHOLDER);
+  writeAuto(testPath, testDoc || TEST_PLACEHOLDER);
 }
+
+const DEPLOY_PLACEHOLDER =
+  "# Deployment\n\n_Not yet documented — edit via webmux → Settings → Deploy docs._\n";
+const TEST_PLACEHOLDER =
+  "# Test & Verification\n\n_Not yet documented — edit via webmux → Settings → Test docs._\n";
 
 function writeAuto(filePath: string, content: string): void {
   try { fs.writeFileSync(filePath, content, "utf-8"); }
   catch { /* ignore */ }
 }
 
-function seedUser(filePath: string, content: string): void {
-  if (fs.existsSync(filePath)) return;
-  try { fs.writeFileSync(filePath, content, "utf-8"); }
-  catch { /* ignore */ }
+function tryReadFile(filePath: string): string {
+  try { return fs.readFileSync(filePath, "utf-8"); }
+  catch { return ""; }
 }
 
 /** Single source of truth for what "has a webmux pointer" means in CLAUDE.md. */

@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
       command: p.command,
       repo_url: p.repoUrl,
       repo_token: p.repoToken ? "***" : "", // mask token in list
+      deploy_doc: p.deployDoc,
+      test_doc: p.testDoc,
       created: live?.created || "",
       attached: live?.attached || false,
       width: live?.width || 0,
@@ -56,6 +58,8 @@ export async function GET(request: NextRequest) {
         command: "",
         repo_url: "",
         repo_token: "",
+        deploy_doc: "",
+        test_doc: "",
         created: s.created,
         attached: s.attached,
         width: s.width,

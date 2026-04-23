@@ -36,6 +36,8 @@ model Project {
   jsonlSessionPinned Boolean @default(false) @map("jsonl_session_pinned")
   repoUrl        String   @default("") @map("repo_url")    // GitHub/Bitbucket URL
   repoToken      String   @default("") @map("repo_token")  // PAT for API access
+  deployDoc      String   @default("") @map("deploy_doc")  // markdown → .webmux/deploy.md
+  testDoc        String   @default("") @map("test_doc")    // markdown → .webmux/test.md
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   notes       Note[]

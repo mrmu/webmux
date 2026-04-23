@@ -37,7 +37,10 @@ export default function ProjectSettings({
   const [cwd, setCwd] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [repoToken, setRepoToken] = useState("");
+  const [deployDoc, setDeployDoc] = useState("");
+  const [testDoc, setTestDoc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   // Hosts
   const [hosts, setHosts] = useState<Host[]>([]);
@@ -67,6 +70,8 @@ export default function ProjectSettings({
         setRepoUrl(p.repo_url || "");
         // Don't overwrite token placeholder — only set if empty
         if (!p.repo_token) setRepoToken("");
+        setDeployDoc(p.deploy_doc || "");
+        setTestDoc(p.test_doc || "");
       }
     } catch { /* ignore */ }
   }, [projectName]);
@@ -113,9 +118,21 @@ export default function ProjectSettings({
         repo_url: repoUrl,
         // Only send token if user typed a new one (not the masked "***")
         ...(repoToken && repoToken !== "***" && { repo_token: repoToken }),
+        deploy_doc: deployDoc,
+        test_doc: testDoc,
       });
     } catch { /* ignore */ }
     setSaving(false);
+  };
+
+  const syncWebmux = async () => {
+    setSyncBusy(true);
+    try {
+      await api.post(`/api/sessions/${projectName}/webmux/sync`, {});
+      await loadProject();
+      await loadClaudeMd();
+    } catch { /* ignore */ }
+    setSyncBusy(false);
   };
 
   const addHost = async () => {
@@ -240,6 +257,64 @@ export default function ProjectSettings({
           </div>
         </section>
 
+        {/* .webmux/ docs — DB-backed, regenerates the files on save */}
+        <section className="settings-section">
+          <h3>
+            Project Docs
+            <button
+              onClick={syncWebmux}
+              disabled={syncBusy}
+              className="settings-hint"
+              style={{
+                marginLeft: "0.75rem",
+                fontSize: "0.8rem",
+                padding: "0.15rem 0.5rem",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 4,
+                background: "transparent",
+                cursor: "pointer",
+              }}
+              title="Regenerate .webmux/ files from DB"
+            >
+              {syncBusy ? "Syncing..." : "Sync .webmux/"}
+            </button>
+          </h3>
+          <p className="settings-hint">
+            Content goes into <code>.webmux/deploy.md</code> and <code>.webmux/test.md</code>.
+            DB is source of truth; the files are regenerated.
+          </p>
+          <div className="form-row">
+            <label>Deploy docs</label>
+            <textarea
+              value={deployDoc}
+              onChange={(e) => setDeployDoc(e.target.value)}
+              placeholder="# Deployment&#10;&#10;Steps, commands, rollback, etc."
+              rows={6}
+              style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
+            />
+          </div>
+          <div className="form-row">
+            <label>Test docs</label>
+            <textarea
+              value={testDoc}
+              onChange={(e) => setTestDoc(e.target.value)}
+              placeholder="# Test & Verification&#10;&#10;Before / after deploy checks."
+              rows={6}
+              style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
+            />
+          </div>
+          <div style={{ marginTop: "0.5rem" }}>
+            <button
+              className="btn-primary"
+              onClick={saveProject}
+              disabled={saving}
+              style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
+            >
+              {saving ? "Saving..." : "Save docs"}
+            </button>
+          </div>
+        </section>
+
         {/* CLAUDE.md Status */}
         <section className="settings-section">
           <h3>CLAUDE.md</h3>
@@ -277,7 +352,7 @@ export default function ProjectSettings({
               ) : (
                 <>
                   <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
-                    <span className="claudemd-icon">{claudeMd.hasDeploy ? "&#x2705;" : "&#x26A0;"}</span>
+                    <span className="claudemd-icon">{claudeMd.hasDeploy ? "✅" : "⚠"}</span>
                     <span>
                       {claudeMd.hasDeploy
                         ? "Deploy instructions found"
