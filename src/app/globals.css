@@ -627,6 +627,7 @@ html, body {
   padding: 4px;
 }
 
+
 /* ─── Terminal Window Tabs ────────── */
 .terminal-window-tabs {
   display: flex; overflow-x: auto; scrollbar-width: none;

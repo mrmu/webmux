@@ -120,7 +120,8 @@ export default function ChatView({
   // Set on send to force scroll-to-bottom even when the user was scrolled up.
   const forceScrollRef = useRef(false);
 
-  // Clear and reload when switching projects
+  // Clear and reload when switching projects (or mounting — this also covers
+  // page refresh, where we always want to jump to the latest message).
   useEffect(() => {
     setMessages([]);
     setPendingUserTexts([]);
@@ -129,10 +130,33 @@ export default function ChatView({
         const res = await fetch(`/api/sessions/${sessionName}/chat`);
         if (!res.ok) return;
         const data = await res.json();
+        // Set the force-scroll flag right before the messages arrive so the
+        // scroll effect sees it in the same render cycle. Setting it earlier
+        // would get consumed by the empty-state render triggered above.
+        forceScrollRef.current = true;
         setMessages(data.messages || []);
       } catch { /* SSE will pick up */ }
     })();
   }, [sessionName]);
+
+  // Drop optimistic entries whose text has landed in the real log,
+  // then apply the latest messages (buffering if user is selecting text).
+  const applyLatestMessages = useCallback((msgs: ChatMessage[]) => {
+    const realUserTexts = new Set(
+      msgs
+        .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
+        .map((m) => m.text as string)
+    );
+    setPendingUserTexts((prev) => {
+      const next = prev.filter((t) => !realUserTexts.has(t));
+      return next.length === prev.length ? prev : next;
+    });
+    if (userSelectingRef.current) {
+      pendingUpdateRef.current = msgs;
+    } else {
+      setMessages(msgs);
+    }
+  }, []);
 
   // SSE: live updates after initial load
   useEffect(() => {
@@ -143,22 +167,7 @@ export default function ChatView({
     eventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        const msgs: ChatMessage[] = data.messages || [];
-        // Drop optimistic entries whose text has landed in the real log.
-        const realUserTexts = new Set(
-          msgs
-            .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
-            .map((m) => m.text as string)
-        );
-        setPendingUserTexts((prev) => {
-          const next = prev.filter((t) => !realUserTexts.has(t));
-          return next.length === prev.length ? prev : next;
-        });
-        if (userSelectingRef.current) {
-          pendingUpdateRef.current = msgs;
-        } else {
-          setMessages(msgs);
-        }
+        applyLatestMessages(data.messages || []);
       } catch {
         /* ignore parse errors */
       }
@@ -169,7 +178,26 @@ export default function ChatView({
     };
 
     return () => eventSource.close();
-  }, [sessionName]);
+  }, [sessionName, applyLatestMessages]);
+
+  // Mobile screen-off can leave the SSE connection in a "sleeping" state —
+  // radio suspends, events queue up in the kernel TCP buffer, and the browser
+  // doesn't reconnect when we return because the socket never errored.
+  // Re-fetch the latest state on visibilitychange so we never wait for the
+  // next fs.watch event to trickle through the stalled pipe.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      fetch(`/api/sessions/${sessionName}/chat`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) applyLatestMessages(data.messages || []);
+        })
+        .catch(() => { /* ignore — SSE / next visibility will retry */ });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [sessionName, applyLatestMessages]);
 
   // Flush buffered update after selection ends
   useEffect(() => {
@@ -227,29 +255,15 @@ export default function ChatView({
     if (!text) return;
     setSendError("");
 
-    // Check if Claude is running before sending
-    try {
-      const state = await api.get(`/api/sessions/${sessionName}/ui-state`);
-      if (!state.process || state.idle) {
-        setSendError("Claude Code is not running. Start it from the Terminal tab.");
-        return;
-      }
-    } catch {
-      // Can't check — send anyway
-    }
-
-    // Show the user's prompt immediately and scroll so it's visible,
-    // regardless of how long the round-trip through tmux/Claude/JSONL takes.
+    // Show the user's prompt + scroll right away. The ui-state check + tmux
+    // send can take seconds on a busy session; the echo should never wait.
     forceScrollRef.current = true;
     setPendingUserTexts((prev) => [...prev, text]);
     setInput("");
 
-    try {
-      await api.post(`/api/sessions/${sessionName}/send`, { text });
-    } catch {
-      setSendError("Failed to send. Check the Terminal tab.");
-      // Roll back the optimistic entry — remove the first match so duplicate
-      // sends of the same text don't all vanish on a single failure.
+    // Remove the first matching entry so duplicate sends of the same text
+    // don't all vanish on a single failure.
+    const rollback = () => {
       setPendingUserTexts((prev) => {
         const idx = prev.indexOf(text);
         if (idx < 0) return prev;
@@ -257,6 +271,24 @@ export default function ChatView({
         copy.splice(idx, 1);
         return copy;
       });
+    };
+
+    try {
+      const state = await api.get(`/api/sessions/${sessionName}/ui-state`);
+      if (!state.process || state.idle) {
+        setSendError("Claude Code is not running. Start it from the Terminal tab.");
+        rollback();
+        return;
+      }
+    } catch {
+      // Can't check — send anyway
+    }
+
+    try {
+      await api.post(`/api/sessions/${sessionName}/send`, { text });
+    } catch {
+      setSendError("Failed to send. Check the Terminal tab.");
+      rollback();
     }
   };
 
