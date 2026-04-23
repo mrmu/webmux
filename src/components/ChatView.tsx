@@ -142,7 +142,14 @@ export default function ChatView({
   // we wait for Claude Code to write them into JSONL and SSE to round-trip.
   // Entries are dropped once the real message appears in `messages`.
   const [pendingUserTexts, setPendingUserTexts] = useState<string[]>([]);
-  const [input, setInput] = useState("");
+  const draftKey = `chat-draft:${sessionName}`;
+  // Initialize from localStorage so the draft is present on first paint.
+  // Wrapped because iOS private browsing historically threw on any access.
+  const [input, setInput] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem(`chat-draft:${sessionName}`) || ""; }
+    catch { return ""; }
+  });
   const [sessionInfo, setSessionInfo] = useState<SessionsResponse | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   // Bumped on pin/unpin to force the SSE stream to reconnect — otherwise the
@@ -165,6 +172,13 @@ export default function ChatView({
       /* ignore */
     }
   }, [sessionName]);
+
+  // Re-load draft when sessionName changes — covers the case where ChatView
+  // isn't remounted across project switches (useState init only runs once).
+  useEffect(() => {
+    try { setInput(localStorage.getItem(draftKey) || ""); }
+    catch { /* ignore */ }
+  }, [draftKey]);
 
   // Clear and reload when switching projects (or mounting — this also covers
   // page refresh, where we always want to jump to the latest message).
@@ -360,6 +374,7 @@ export default function ChatView({
     forceScrollRef.current = true;
     setPendingUserTexts((prev) => [...prev, text]);
     setInput("");
+    try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
 
     // Remove the first matching entry so duplicate sends of the same text
     // don't all vanish on a single failure.
@@ -489,7 +504,12 @@ export default function ChatView({
               rows={1}
               value={input}
               onChange={(e) => {
-                setInput(e.target.value);
+                const v = e.target.value;
+                setInput(v);
+                try {
+                  if (v) localStorage.setItem(draftKey, v);
+                  else localStorage.removeItem(draftKey);
+                } catch { /* ignore — iOS private mode etc. */ }
                 if (sendError) setSendError("");
                 e.target.style.height = "auto";
                 e.target.style.height =
