@@ -10,20 +10,23 @@ GitHub: `git@github.com:mrmu/webmux.git`
 
 ```
 Host (Linux VPS / macOS)
-├── tmux server              ← session 持久化，容器重啟不受影響
+├── tmux server              ← session 持久化
 ├── Claude Code CLI          ← 已安裝、已認證 (Max Plan)
+├── webmux (Next.js + WS)    ← Node 直接跑在 host (systemd in prod, `npm run dev` in dev)
 ├── {projectsRoot}/          ← 所有專案目錄 (DB 設定)
 └── ~/.claude/               ← Claude Code 認證 + 設定
 
-Docker
-├── webmux (Next.js)         ← web UI + API，以 host UID 跑
+Docker (只跑輔助服務)
 ├── PostgreSQL               ← 專案 metadata、用戶帳號、settings
-└── wp-proxy network         ← nginx reverse proxy + HTTPS
+└── webmux-proxy (socat)     ← 註冊 VIRTUAL_HOST 給 nginx-proxy，轉發到 host:3000
+                               (讓 acme-companion 自動簽 Let's Encrypt 憑證)
 ```
 
-- webmux 是 **web UI only** — 不安裝、不管理 Claude Code
-- tmux 和 Claude Code 跑在**宿主機**
-- Production 容器以 host user 的 UID 跑，透過 socket mount 連到 host tmux
+- webmux 本體**不跑在容器裡** — host 直接跑 Node，這樣才能直接存取 tmux socket、
+  Claude Code 認證、SSH keys、`~/.claude/` 等檔案。早期把 webmux 塞容器再用
+  `pid: host` + UID/GID override + home mount 假冒 host user 的做法已棄用。
+- Docker 只負責 DB 和一個薄 socat proxy 讓 nginx-proxy-automation 能掃到
+  `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 自動簽憑證。
 
 ## Tech Stack
 
@@ -54,29 +57,26 @@ npm run dev
 
 - `npm run dev` 跑兩個進程：Next.js (port 3000) + terminal WebSocket (port 3001)
 - `dev-proxy` (socat) 讓 nginx-proxy 把 webmux.test 轉到 host 的 port 3000
-- macOS 不走 Docker app container（不能 mount Unix socket）
 
-## Production 部署 (Linux)
+## Production 部署
 
-```bash
-# 首次
-git clone git@github.com:mrmu/webmux.git ~/webmux && cd ~/webmux
-cp .env.example .env  # 編輯設定
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+**部署方式與完整步驟請見 [`docs/deploy/setup.md`](docs/deploy/setup.md)**。
+摘要：Node 直接跑在宿主機（systemd 管理），Docker 只跑 DB + socat proxy，
+nginx-proxy-automation 透過 socat 容器的 `VIRTUAL_HOST` 自動簽 Let's Encrypt。
 
-# 更新
-cd ~/webmux && git pull
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
-```
+### 正式機清單
 
-詳見 `docs/deploy/setup.md`
+| 用途 | 網址 | SSH |
+|------|------|-----|
+| 個人專案 | https://webmux.audilu.com | `devops@linode-audi-inv` (Tailscale，需要時 `sudo su` 切 root) |
+| 泛科專案 | — | 尚未完成設定 |
 
 ## Commands
 
 ```bash
 npm run dev          # Dev: Next.js + WS server (host tmux)
 npm run build        # Production build (prisma generate + next build)
-npm start            # Production server (custom server.ts)
+npm start            # Local prod-mode smoke test (tsx server.ts) — 正式機用 prod-server.js + systemd
 npm run db:push      # Push schema to DB
 npm run db:migrate   # Run migrations
 ```

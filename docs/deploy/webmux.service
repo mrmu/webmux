@@ -1,0 +1,36 @@
+[Unit]
+Description=webmux — Next.js + tmux WebSocket terminal
+Documentation=https://github.com/mrmu/webmux
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 改成實際的 dev user (跟跑 tmux / claude 的是同一個)
+User=devops
+Group=devops
+WorkingDirectory=/home/devops/webmux
+
+# 從 .env 讀 DATABASE_URL / WEBMUX_SECRET / VIRTUAL_HOST / PROJECTS_ROOT / ...
+EnvironmentFile=/home/devops/webmux/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+
+# 用 prod-server.js (plain JS, 不需編譯) 在 repo root 直接跑 —
+# 它會讀 ./.next/required-server-files.json + next/dist/server/lib/start-server
+# 以及 ws / node-pty / jsonwebtoken 這些 node_modules 依賴
+ExecStart=/usr/bin/node prod-server.js
+
+Restart=on-failure
+RestartSec=5
+# tmux 已 daemonize，不屬於這個 cgroup，KillMode=process 只殺 Node 主程序
+KillMode=process
+TimeoutStopSec=10
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=webmux
+
+[Install]
+WantedBy=multi-user.target

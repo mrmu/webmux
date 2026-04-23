@@ -1,67 +1,105 @@
 # webmux
 
-Web-based tmux session manager for Claude Code. Manage multiple AI-assisted development projects from your phone or desktop browser.
+給 Claude Code 用的網頁版 tmux session 管理工具。用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案。
 
-## What it does
+## 能做什麼
 
-- **Terminal** — xterm.js connected to host tmux via PTY (real terminal)
-- **Chat** — Claude Code conversations (JSONL parsing, SSE live push)
-- **Files** — Browse and edit project files
-- **Projects** — Each project = one tmux session with multiple windows
-- **Hosts** — Track deployment targets (SSH/Tailscale machines) per project
-- **DNS** — Manage Cloudflare DNS records
-- **Auth** — Email/password accounts (bcrypt + JWT), admin-only registration
+- **Terminal** — xterm.js 透過 PTY 接宿主機的 tmux（真的終端機，不是模擬）
+- **Chat** — 解析 Claude Code 的 JSONL 對話記錄，SSE 即時推播訊息
+- **Files** — 瀏覽、編輯專案檔案
+- **Projects** — 一個專案對應一個 tmux session，session 裡可以開多個 window
+- **Hosts** — 記錄每個專案的部署目標（SSH / Tailscale 機器）
+- **DNS** — 透過 Cloudflare API 管理 DNS 記錄
+- **Auth** — email + 密碼登入（bcrypt + JWT），註冊只開給管理員
 
-## Architecture
+## 架構（白話版）
+
+webmux 是一個「半容器化」的架構：
 
 ```
-Browser → nginx-proxy (HTTPS) → Docker (Next.js + PostgreSQL)
-                                     ↕ tmux socket mount
-                                Host: tmux + Claude Code (your account)
+                                    宿主機 (Linux VPS)
+                                    ┌─────────────────────────────┐
+ 瀏覽器 → nginx-proxy ─┐            │  webmux (Node, port 3000)   │
+         + acme(SSL)   │            │  ├─ Next.js + API           │
+                       │            │  ├─ Terminal WebSocket      │
+                   ┌───▼─────────┐  │  └─ 讀寫 tmux / claude / ssh │
+                   │socat 容器    │─▶│                             │
+                   │(wp-proxy net)│  │  tmux + Claude Code         │
+                   └─────────────┘  │  (以 devops user 身份跑)     │
+                                    │                             │
+                                    │  ┌────────────────────┐     │
+                                    │  │ PostgreSQL 容器     │     │
+                                    │  │ (5432 只開 local)   │     │
+                                    │  └────────────────────┘     │
+                                    └─────────────────────────────┘
 ```
 
-webmux is a **web UI only**. It does NOT install or run Claude Code — that runs on the host with your own authentication.
+**重點：**
 
-## Quick Start
+- webmux 本體（Next.js + WebSocket）**直接跑在宿主機 port 3000**，**沒有容器化**，用 systemd 管理。
+- 另外起一個**很薄的 socat 容器**掛在 `wp-proxy` network 上，它只做一件事：把流量從 nginx-proxy 轉派給宿主機的 3000 port。
+- 這個 socat 容器帶著 `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 環境變數，讓 nginx-proxy-automation + acme-companion 自動簽 / 續 Let's Encrypt 憑證。
+- PostgreSQL 也是容器跑，port 5432 只綁 `127.0.0.1`，不對外開放。
+- 因為 webmux 直接在宿主機上用 devops user 身份執行，所以**天生就能用宿主機的 Claude Code、SSH keys、tmux socket、`~/.claude/`** — 不需要做 UID mapping、pid:host、home mount 這些脆弱的容器 hack。
 
-### Production (Linux VPS)
+一句話：**享有 nginx-proxy 自動 SSL 的好處 + 享有宿主機原生權限的能力，兩邊都要。**
+
+（為什麼不全容器化：早期版本有做過 `pid: host` + UID/GID mount + `~/` mount 去假冒 host user，結果 Claude Code 一更新或路徑一變就壞掉，改回直接跑 host 穩定得多。）
+
+## 快速開始
+
+### 正式機部署（Linux）
+
+詳細步驟見 [`docs/deploy/setup.md`](docs/deploy/setup.md)。摘要：
 
 ```bash
-# Prerequisites: Docker, tmux, Claude Code (authenticated), Node.js
+# 前置：Node 22、tmux、git、docker 都裝好；Claude Code 已 OAuth 登入
 git clone git@github.com:mrmu/webmux.git ~/webmux && cd ~/webmux
 
-# Configure
-cp .env.example .env  # edit: HOST_UID, VIRTUAL_HOST, secrets
+# 設定環境變數（DATABASE_URL、WEBMUX_SECRET、VIRTUAL_HOST 等）
+cp .env.example .env && nano .env
 
-# Deploy
+# Build + 起 DB 和 socat proxy
+npm ci && npm run build
 docker network create wp-proxy 2>/dev/null || true
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+npm run db:push
 
-# Open https://your-domain.com → first-time setup (admin account + projects directory)
+# 用 systemd 管 webmux 本體
+sudo cp docs/deploy/webmux.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now webmux
+
+# 開瀏覽器進 https://webmux.yoursite.com，第一次會請你建 admin 帳號
 ```
 
-### Update
+### 更新
 
 ```bash
-cd ~/webmux && git pull
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+cd ~/webmux && git pull && npm ci && npm run build
+sudo systemctl restart webmux
+# tmux session 不受影響（它是獨立 daemon）
 ```
 
-### Local Dev (macOS)
+### 本機開發（macOS）
 
 ```bash
-docker compose up -d db dev-proxy   # DB + nginx-proxy bridge
+docker compose up -d db dev-proxy   # DB + nginx-proxy 轉發橋接
 npm run dev                         # http://webmux.test
 ```
 
-## Key Files
+`npm run dev` 同時跑 Next.js（port 3000）+ Terminal WebSocket（port 3001）。
 
-| File | Purpose |
-|------|---------|
-| `prod-server.js` | Production: Next.js standalone + WebSocket |
-| `ws-server.ts` | Terminal WebSocket (PTY → tmux attach) |
-| `src/lib/tmux.ts` | tmux command adapter |
+## 主要檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `prod-server.js` | 正式機入口：Next.js + WebSocket 合併在 port 3000 |
+| `server.ts` | Dev 用的 Next.js + WebSocket 客製伺服器 |
+| `ws-server.ts` | Terminal WebSocket 實作（PTY → `tmux attach-session`） |
+| `docker-compose.production.yml` | 正式機：只起 DB + socat proxy，app 停用 |
+| `docs/deploy/webmux.service` | systemd unit file（跑 `node prod-server.js`） |
+| `docs/deploy/setup.md` | 完整部署指南 |
+| `src/lib/tmux.ts` | tmux 指令封裝 |
 | `src/lib/cloudflare.ts` | Cloudflare DNS API |
-| `src/lib/auth.ts` | Email/password auth (bcrypt + JWT) |
-| `src/lib/settings.ts` | DB-backed settings (projects root, etc.) |
-| `docs/deploy/setup.md` | Full deployment guide |
+| `src/lib/auth.ts` | email + 密碼登入（bcrypt + JWT） |
+| `src/lib/settings.ts` | DB 裡的鍵值設定（projectsRoot 等） |

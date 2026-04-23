@@ -7,17 +7,24 @@ Linux Host (VPS)
 ├── dev user (e.g. devops)
 │   ├── tmux server          ← session 持久化
 │   ├── Claude Code CLI      ← Max Plan 登入
-│   ├── ~/projects/          ← 所有專案
+│   ├── Node.js + webmux     ← systemd 管理，佔 port 3000
 │   └── ~/.claude/           ← 認證 + 設定
 │
 └── Docker
-    ├── webmux (Next.js)     ← web UI, 用 dev user 的 UID 跑
     ├── PostgreSQL           ← 專案 metadata + 用戶帳號
-    └── wp-proxy network     ← nginx reverse proxy + HTTPS
+    └── webmux-proxy         ← socat: wp-proxy network → host:3000
+                               (讓 nginx-proxy + acme-companion 看到
+                                VIRTUAL_HOST / LETSENCRYPT_HOST 自動簽憑證)
 ```
 
-容器用跟宿主機 dev user **同一個 UID** 跑，透過 socket mount 連到 host tmux。
-Claude Code 跑在宿主機上，不在容器裡。
+webmux 本身**不跑在容器裡** — 直接在宿主機用 `systemd` 管理。
+容器版本的舊部署因為要假冒 host user (UID/GID mount + pid:host + home mount)
+太脆弱，Claude Code 或路徑變動容易整個壞掉，所以全砍。
+
+Docker 只剩兩件事：
+
+1. 跑 PostgreSQL
+2. 提供一個薄薄的 socat 容器註冊 `VIRTUAL_HOST` 給 nginx-proxy，讓 SSL 自動續
 
 ---
 
@@ -26,10 +33,7 @@ Claude Code 跑在宿主機上，不在容器裡。
 ```bash
 sudo adduser devops
 sudo usermod -aG docker devops
-
-# 記住 UID/GID
-id devops
-# uid=1001(devops) gid=1001(devops) ...
+id devops   # 記下 uid/gid
 ```
 
 ## 2. 安裝宿主機工具
@@ -39,97 +43,142 @@ id devops
 ```bash
 su - devops
 
-# Node.js (for Claude Code)
+# Node.js 22 (webmux + Claude Code 共用)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# tmux
+# tmux + git
 sudo apt install -y tmux git
 
 # Claude Code
 npm install -g @anthropic-ai/claude-code
-
-# 首次登入（Max Plan OAuth）
-claude
-# 完成瀏覽器認證流程
-
-# 確認
+claude   # 首次 OAuth 登入 (Max Plan)
 claude --version
 tmux -V
 ```
 
-## 3. 設定 Tailscale（選用）
+## 3. Tailscale（選用）
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 ```
 
-## 4. 部署 WebMux
+## 4. 拉 webmux + build
 
 ```bash
 cd ~
-git clone <your-repo-url> webmux
+git clone git@github.com:mrmu/webmux.git
 cd webmux
 
-# 設定環境變數
+# 先產生兩個 secret，再寫進 .env (DATABASE_URL 和 POSTGRES_PASSWORD 必須同一個密碼)
+DB_PASS=$(openssl rand -hex 16)
+JWT=$(openssl rand -hex 32)
+
 cat > .env << EOF
-# Database
-POSTGRES_PASSWORD=$(openssl rand -hex 16)
+# Database (localhost 因為 Node 跑在 host，DB 容器 port 5432 mapped to host)
+DATABASE_URL=postgresql://webmux:${DB_PASS}@localhost:5432/webmux?schema=public
+POSTGRES_PASSWORD=${DB_PASS}
 
-# Auth JWT secret
-WEBMUX_SECRET=$(openssl rand -hex 32)
+# Auth JWT
+WEBMUX_SECRET=${JWT}
 
-# Host user（讓容器能存取 tmux socket）
-HOST_UID=$(id -u)
-HOST_GID=$(id -g)
-HOST_USER_HOME=$HOME
+# 專案根目錄
+PROJECTS_ROOT=/home/devops/projects
 
-# Domain
+# Domain / SSL
 VIRTUAL_HOST=webmux.yoursite.com
 LETSENCRYPT_EMAIL=you@example.com
+
+# WS origin allowlist
+ALLOWED_ORIGINS=webmux.yoursite.com,localhost
+
+# Cloudflare (選用，DNS 管理功能才需要)
+CF_API_TOKEN=
+CF_ZONE_ID=
 EOF
 
-# 啟動前確保 wp-proxy network 存在
-docker network create wp-proxy 2>/dev/null || true
-
-# 啟動
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+# 安裝依賴 + build
+npm ci
+npm run build
 ```
 
-## 5. 首次設定
-
-1. 開瀏覽器 → `https://webmux.yoursite.com`
-2. 建立 admin 帳號（email + 密碼）
-3. 建立第一個專案 → Terminal tab → 輸入 `claude`
-4. Claude Code 會使用宿主機已登入的認證
-
-## 6. 驗證
+## 5. 啟動 DB + nginx-proxy
 
 ```bash
-# 容器運行中？
-docker ps | grep webmux
+# wp-proxy network 必須已存在 (nginx-proxy-automation 那組)
+docker network create wp-proxy 2>/dev/null || true
 
-# API 正常？
+# 起 DB + prod-proxy (socat)
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+
+# 確認
+docker ps | grep -E 'webmux|postgres'
+```
+
+## 6. Push DB schema
+
+```bash
+cd ~/webmux
+npm run db:push
+```
+
+## 7. systemd 管理 webmux
+
+```bash
+# 複製 unit file (視情況調整 User/WorkingDirectory 路徑)
+sudo cp docs/deploy/webmux.service /etc/systemd/system/webmux.service
+sudo nano /etc/systemd/system/webmux.service   # 確認 User=, WorkingDirectory=, EnvironmentFile= 路徑對
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now webmux
+
+# 檢查
+sudo systemctl status webmux
+sudo journalctl -u webmux -f
+```
+
+## 8. 驗證
+
+```bash
+# Node 跑在 host
 curl -s http://localhost:3000/api/auth/check
 
-# tmux 可存取？
-docker exec webmux tmux list-sessions
+# 容器 proxy 也通
+docker exec webmux-proxy nc -zv host.docker.internal 3000
+
+# nginx-proxy 有簽憑證後
+curl -I https://webmux.yoursite.com
 ```
+
+瀏覽器開 `https://webmux.yoursite.com`，建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
 
 ---
 
-## 常用操作
+## 更新 webmux
 
 ```bash
-# 更新 webmux
-cd ~/webmux && git pull
-docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+cd ~/webmux
+git pull
+npm ci
+npm run build
+sudo systemctl restart webmux
+# tmux session 不受影響（獨立 daemon）
+```
 
-# 查看 logs
-docker logs webmux -f
+## 常用 debug
 
-# tmux session 不受容器重啟影響（跑在宿主機）
+```bash
+# Node log
+sudo journalctl -u webmux -f
+
+# 代理容器 log
+docker logs webmux-proxy -f
+
+# DB 直接連
+docker exec -it $(docker compose ps -q db) psql -U webmux
+
+# tmux (直接在 host，不透過容器)
 tmux list-sessions
 tmux attach -t <project-name>
 ```
@@ -138,26 +187,31 @@ tmux attach -t <project-name>
 
 ## macOS 本機開發
 
-本機不走 Docker app container，直接跑 dev server：
+本機流程未變：
 
 ```bash
 cd ~/next/webmux
-
-# Prerequisites
 brew install tmux
 npm install -g @anthropic-ai/claude-code
 
-# 啟動 DB + nginx-proxy 轉發
 docker compose up -d db dev-proxy
-
-# 啟動 dev server
 npm run dev
 
-# 開啟 http://webmux.test
+# http://webmux.test
 ```
 
-`npm run dev` 跑兩個進程：
-- Next.js (port 3000) — 頁面 + API + HMR
-- Terminal WebSocket (port 3001) — PTY → tmux
+`npm run dev` 跑兩個進程（Next.js port 3000 + WS port 3001），`dev-proxy` 容器把
+`webmux.test` 流量從 nginx-proxy 轉到宿主機 port 3000 
 
-`dev-proxy` (socat container) 讓 nginx-proxy 把 `webmux.test` 轉到 host port 3000。
+## 個人專案正式機
+
+網址: https://webmux.audilu.com
+已透過加入tailscale 能用以下ssh指令登入，且需要時也能用sudo su切換成管理者權限:
+
+```
+devops@linode-audi-inv
+```
+
+## 泛科專案正式機
+
+尚未完成設定

@@ -1,30 +1,39 @@
 # Production overrides (Linux)
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
-# Prerequisites on host:
-#   - tmux, git, Claude Code installed and authenticated
-#
-# pid: host — container shares host PID namespace, so:
-#   - tmux sessions run as host processes
-#   - Claude Code (installed on host) works inside tmux sessions
+# 架構：
+#   - webmux (Next.js + WS) 直接跑在宿主機 (systemd) — port 3000
+#   - 本檔案只負責 DB + 一個薄的 socat proxy，讓 nginx-proxy / acme-companion
+#     能掃到 VIRTUAL_HOST / LETSENCRYPT_HOST 並自動簽憑證
+#   - host.docker.internal 需要 extra_hosts (Linux 沒有內建)
 services:
+  # Expose DB to host (Node 跑在宿主機，透過 localhost:5432 連)
+  # 綁 127.0.0.1 只讓本機存取，不對外開放
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # 停用容器版 app
   app:
-    user: "${HOST_UID}:${HOST_GID}"
-    pid: host
+    profiles: ["disabled"]
+
+  # 停用 migrate (改由 host 端 `npm run db:push` 處理)
+  migrate:
+    profiles: ["disabled"]
+
+  # 把 nginx-proxy 流量轉到宿主機的 Node process
+  prod-proxy:
+    image: alpine/socat
+    container_name: webmux-proxy
+    command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
+    restart: unless-stopped
     environment:
       VIRTUAL_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
       VIRTUAL_PORT: "3000"
       LETSENCRYPT_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
-      PROJECTS_ROOT: ${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}
-      HOME: ${HOST_USER_HOME:-/home/devops}
-      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOST_USER_HOME:-/home/devops}/.local/bin
-      CF_API_TOKEN: ${CF_API_TOKEN:-}
-      CF_ZONE_ID: ${CF_ZONE_ID:-}
-    volumes:
-      # Host tmux socket
-      - /tmp/tmux-${HOST_UID}:/tmp/tmux-${HOST_UID}:rw
-      # Host user home — claude config, ssh keys, .local/bin
-      - ${HOST_USER_HOME:-/home/devops}:${HOST_USER_HOME:-/home/devops}:rw
-      # Projects directory
-      - ${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}:${PROJECTS_ROOT:-/var/docker-www/wp-proxy-sites}:rw
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - wp-proxy
+      - default
