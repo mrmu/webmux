@@ -45,6 +45,12 @@ export function requireAuth(request: NextRequest): boolean {
   return verifyToken(token) !== null;
 }
 
+export function getCurrentUserEmail(request: NextRequest): string {
+  const token = getTokenFromRequest(request);
+  if (!token) return "";
+  return verifyToken(token)?.email || "";
+}
+
 export async function login(
   email: string,
   password: string

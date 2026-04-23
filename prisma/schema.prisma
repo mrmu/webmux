@@ -40,6 +40,8 @@ model Project {
   updatedAt   DateTime @updatedAt @map("updated_at")
   notes       Note[]
   hosts       Host[]
+  issues      Issue[]
+  scanRuns    ScanRun[]
 
   @@map("projects")
 }
@@ -67,4 +69,109 @@ model Note {
   project     Project  @relation(fields: [sessionName], references: [name], onDelete: Cascade)
 
   @@map("notes")
+}
+
+// Issue tracker — cross-project, audit-friendly (soft delete + event log).
+// status:   OPEN / IN_PROGRESS / FIXED / WONT_FIX / FALSE_POSITIVE / RISK_ACCEPTED
+// severity: LOW / MEDIUM / HIGH / CRITICAL
+// source:   MANUAL / SCAN / EXTERNAL_SYNC
+model Issue {
+  id             Int      @id @default(autoincrement())
+  projectName    String   @map("project_name")
+  title          String
+  body           String   @default("")
+  status         String   @default("OPEN")
+  severity       String   @default("MEDIUM")
+  source         String   @default("MANUAL")
+  sourceRef      String   @default("") @map("source_ref")
+  assignedTo     String   @default("") @map("assigned_to")
+  sessionName    String   @default("") @map("session_name")
+
+  resolutionType String    @default("") @map("resolution_type") // COMMIT / PR / EXTERNAL / ACCEPTED_RISK / NOT_APPLICABLE
+  resolutionRef  String    @default("") @map("resolution_ref")
+  resolutionNote String    @default("") @map("resolution_note")
+  resolvedBy     String    @default("") @map("resolved_by")
+  resolvedAt     DateTime? @map("resolved_at")
+
+  createdBy      String   @default("") @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  project        Project      @relation(fields: [projectName], references: [name], onDelete: Cascade)
+  events         IssueEvent[]
+
+  @@index([projectName])
+  @@index([status])
+  @@map("issues")
+}
+
+// A single semgrep (or other SAST tool) execution on a project. Persist the
+// raw SARIF file path too — audit evidence.
+model ScanRun {
+  id          Int      @id @default(autoincrement())
+  projectName String   @map("project_name")
+  tool        String   // "semgrep", future: "trivy", "npm-audit"
+  toolVersion String   @default("") @map("tool_version")
+  rulesetRef  String   @default("") @map("ruleset_ref") // e.g. "auto" or git sha of custom rules
+  commitSha   String   @default("") @map("commit_sha")  // what commit was scanned
+  status      String   @default("RUNNING")              // RUNNING / SUCCESS / FAILED
+  errorMessage String  @default("") @map("error_message")
+  startedAt   DateTime @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  sarifPath   String   @default("") @map("sarif_path")  // absolute path on host
+  summary     Json     @default("{}")                   // {critical, high, medium, low, info}
+
+  project     Project       @relation(fields: [projectName], references: [name], onDelete: Cascade)
+  findings    ScanFinding[]
+
+  @@index([projectName])
+  @@index([startedAt])
+  @@map("scan_runs")
+}
+
+// A single finding within a ScanRun. `fingerprint` dedupes the same issue
+// across subsequent runs — first run creates the row, later runs update
+// `lastSeenAt`. When a finding no longer appears, `fixed` is set.
+model ScanFinding {
+  id          Int      @id @default(autoincrement())
+  scanRunId   Int      @map("scan_run_id")
+  projectName String   @map("project_name") // denormalized for faster queries
+  ruleId      String   @map("rule_id")
+  severity    String   // CRITICAL / HIGH / MEDIUM / LOW / INFO
+  cwe         String   @default("")
+  owasp       String   @default("")
+  cvss        Float?                       // Semgrep-provided security-severity (0-10)
+  filePath    String   @map("file_path")
+  line        Int
+  endLine     Int      @default(0) @map("end_line")
+  message     String   @default("") @db.Text
+  fingerprint String                       // semgrep-provided, stable across runs
+  fixed       Boolean  @default(false)
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+  issueId     Int?     @map("issue_id")    // when PM/Dev promotes finding to tracked Issue
+
+  scanRun     ScanRun  @relation(fields: [scanRunId], references: [id], onDelete: Cascade)
+
+  @@index([projectName])
+  @@index([fingerprint])
+  @@index([severity])
+  @@map("scan_findings")
+}
+
+model IssueEvent {
+  id        Int      @id @default(autoincrement())
+  issueId   Int      @map("issue_id")
+  actor     String
+  action    String   // created, status_changed, severity_changed, assigned, commented, resolved, reopened
+  fromValue String   @default("") @map("from_value")
+  toValue   String   @default("") @map("to_value")
+  note      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
+  @@map("issue_events")
 }
