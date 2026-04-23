@@ -71,7 +71,7 @@ export function listDirectory(baseDir: string, relPath = "."): FileEntry[] {
   const entries: FileEntry[] = [];
   try {
     for (const name of fs.readdirSync(target)) {
-      if (name.startsWith(".") || HIDDEN_NAMES.has(name)) continue;
+      if (HIDDEN_NAMES.has(name)) continue;
       try {
         const st = fs.statSync(path.join(target, name));
         if (st.isDirectory()) {
