@@ -752,6 +752,14 @@ select {
   word-wrap: break-word;
 }
 
+.note-card .note-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 3rem;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
 .note-meta {
   display: flex;
   justify-content: space-between;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 
 interface Note {
@@ -32,6 +32,16 @@ export default function NotesPanel({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
+  const editRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-grow the edit textarea to fit its content, so switching from the
+  // view div to the textarea doesn't suddenly shrink what the user sees.
+  useEffect(() => {
+    const el = editRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [editingId, editDraft]);
 
   const loadNotes = useCallback(async () => {
     try {
@@ -112,10 +122,10 @@ export default function NotesPanel({
               <div key={n.id} className="note-card">
                 {editing ? (
                   <textarea
+                    ref={editRef}
                     className="note-input"
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
-                    rows={Math.max(2, editDraft.split("\n").length)}
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Escape") cancelEdit();
