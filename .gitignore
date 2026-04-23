@@ -42,4 +42,10 @@ data/
 src/generated/
 
 # claude code runtime state
-.claude/scheduled_tasks.lock
+.claude/
+
+# env backups
+.env.bak*
+
+# playwright mcp output
+.playwright-mcp/
