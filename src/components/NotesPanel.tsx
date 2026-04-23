@@ -180,9 +180,17 @@ export default function NotesPanel({
             return (
               <div key={n.id} className={`note-card note-status-${n.status.toLowerCase()}`}>
                 <div className="note-badges">
-                  <span className={`note-status-badge ${n.status.toLowerCase()}`}>
-                    {STATUS_LABEL[n.status]}
-                  </span>
+                  <select
+                    className={`note-status-select ${n.status.toLowerCase()}`}
+                    value={n.status}
+                    onChange={(e) => setStatus(n.id, e.target.value as Note["status"])}
+                    title="Change status"
+                  >
+                    <option value="OPEN">open</option>
+                    <option value="IN_PROGRESS">in progress</option>
+                    <option value="AWAITING">awaiting</option>
+                    <option value="DONE">done</option>
+                  </select>
                   {n.issue_id && (
                     <span className="note-issue-ref" title="Tracked as issue">
                       #{n.issue_id}
@@ -193,6 +201,15 @@ export default function NotesPanel({
                       PR
                     </a>
                   )}
+                  <span style={{ flex: 1 }} />
+                  <button
+                    className="note-trash"
+                    onClick={() => deleteNote(n.id)}
+                    title="Delete note"
+                    aria-label="Delete note"
+                  >
+                    &#x2715;
+                  </button>
                 </div>
                 {editing ? (
                   <textarea
@@ -208,9 +225,9 @@ export default function NotesPanel({
                   />
                 ) : (
                   <div
-                    className="note-content"
-                    onDoubleClick={() => startEdit(n)}
-                    title="Double-click to edit"
+                    className="note-content note-content-clickable"
+                    onClick={() => startEdit(n)}
+                    title="Click to edit"
                   >
                     {n.content}
                   </div>
@@ -234,6 +251,15 @@ export default function NotesPanel({
                     </>
                   ) : (
                     <>
+                      {!n.issue_id && (
+                        <button
+                          className="note-delete"
+                          onClick={() => promoteToIssue(n)}
+                          title="Create a tracked Issue from this note"
+                        >
+                          Promote
+                        </button>
+                      )}
                       {onAskAI && n.status !== "DONE" && (
                         <button
                           className="note-delete"
@@ -244,48 +270,6 @@ export default function NotesPanel({
                           Ask AI
                         </button>
                       )}
-                      <button className="note-delete" onClick={() => startEdit(n)}>
-                        Edit
-                      </button>
-                      {n.status !== "AWAITING" && n.status !== "DONE" && (
-                        <button
-                          className="note-delete"
-                          onClick={() => setStatus(n.id, "AWAITING")}
-                          title="Waiting on more information"
-                        >
-                          Awaiting
-                        </button>
-                      )}
-                      {n.status !== "DONE" && (
-                        <button
-                          className="note-delete"
-                          onClick={() => setStatus(n.id, "DONE")}
-                          title="Mark resolved"
-                        >
-                          Done
-                        </button>
-                      )}
-                      {n.status === "DONE" && (
-                        <button
-                          className="note-delete"
-                          onClick={() => setStatus(n.id, "OPEN")}
-                          title="Reopen"
-                        >
-                          Reopen
-                        </button>
-                      )}
-                      {!n.issue_id && (
-                        <button
-                          className="note-delete"
-                          onClick={() => promoteToIssue(n)}
-                          title="Create a tracked Issue from this note"
-                        >
-                          Promote
-                        </button>
-                      )}
-                      <button className="note-delete" onClick={() => deleteNote(n.id)}>
-                        Delete
-                      </button>
                     </>
                   )}
                 </div>

@@ -762,23 +762,33 @@ select {
   gap: 0.4rem;
   align-items: center;
   margin-bottom: 0.4rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
-.note-status-badge {
+/* Status select styled as a colored pill — value drives the tint. */
+.note-status-select {
   font-size: 0.7rem;
-  padding: 0.1rem 0.45rem;
+  padding: 0.12rem 1.1rem 0.12rem 0.55rem;
   border-radius: 999px;
   background: rgba(255,255,255,0.06);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
   font-weight: 500;
+  border: 1px solid transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 20 20' fill='currentColor'%3E%3Cpath d='M5 8l5 5 5-5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.3rem center;
 }
-.note-status-badge.open         { background: rgba(148,163,184,0.15); color: #94a3b8; }
-.note-status-badge.in_progress  { background: rgba(59,130,246,0.18);  color: #60a5fa; }
-.note-status-badge.awaiting     { background: rgba(245,158,11,0.18);  color: #fbbf24; }
-.note-status-badge.done         { background: rgba(16,185,129,0.18);  color: #34d399; }
+.note-status-select.open         { background-color: rgba(148,163,184,0.15); color: #94a3b8; }
+.note-status-select.in_progress  { background-color: rgba(59,130,246,0.18);  color: #60a5fa; }
+.note-status-select.awaiting     { background-color: rgba(245,158,11,0.18);  color: #fbbf24; }
+.note-status-select.done         { background-color: rgba(16,185,129,0.18);  color: #34d399; }
+.note-status-select:focus { outline: none; border-color: var(--accent); }
+.note-status-select option { background: var(--bg-card); color: var(--text); }
 
 .note-issue-ref,
 .note-pr-link {
@@ -791,6 +801,32 @@ select {
   text-decoration: none;
 }
 .note-pr-link:hover { color: var(--accent); }
+
+.note-trash {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+}
+.note-trash:hover {
+  color: var(--danger);
+  background: rgba(239,68,68,0.1);
+}
+
+.note-content-clickable {
+  cursor: text;
+  border-radius: 4px;
+  padding: 0.1rem 0;
+  transition: background 0.15s;
+}
+.note-content-clickable:hover {
+  background: rgba(255,255,255,0.02);
+}
 
 .note-card.note-status-done { opacity: 0.6; }
 
