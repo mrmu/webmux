@@ -204,7 +204,7 @@ export const WEBMUX_POINTER_BLOCK = [
   "- [`.webmux/project.md`](.webmux/project.md) — project overview (auto)",
   "- [`.webmux/hosts.md`](.webmux/hosts.md) — deployment hosts (auto)",
   "- [`.webmux/deploy.md`](.webmux/deploy.md) — deployment steps",
-  "- [`.webmux/test.md`](.webmux/test.md) — test / verification procedures",
+  "- [`.webmux/test.md`](.webmux/test.md) — test checklist; walk every item and mark a deploy green only when all pass",
   "",
 ].join("\n");
 

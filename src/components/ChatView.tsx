@@ -134,8 +134,10 @@ const MessageList = memo(
 
 export default function ChatView({
   sessionName,
+  prefill,
 }: {
   sessionName: string;
+  prefill?: { text: string; nonce: number } | null;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Optimistic echo: messages just sent by the user, shown immediately while
@@ -179,6 +181,14 @@ export default function ChatView({
     try { setInput(localStorage.getItem(draftKey) || ""); }
     catch { /* ignore */ }
   }, [draftKey]);
+
+  // Prefill from an external action (e.g. Notes "Ask AI" button). The nonce
+  // is part of the dep so the same text can be prefilled twice in a row.
+  useEffect(() => {
+    if (!prefill) return;
+    setInput(prefill.text);
+    try { localStorage.setItem(draftKey, prefill.text); } catch { /* ignore */ }
+  }, [prefill, draftKey]);
 
   // Clear and reload when switching projects (or mounting — this also covers
   // page refresh, where we always want to jump to the latest message).

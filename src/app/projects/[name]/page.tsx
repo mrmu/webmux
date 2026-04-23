@@ -37,6 +37,9 @@ function WorkspacePageContent({
   const [showFiles, setShowFiles] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // Prefill payload for ChatView — nonce bumps so the same text can be sent
+  // twice (e.g. re-Ask AI on the same note) and still trigger an update.
+  const [chatPrefill, setChatPrefill] = useState<{ text: string; nonce: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -87,6 +90,12 @@ function WorkspacePageContent({
     setShowNotes(panel === "notes" ? (v) => !v : false);
     setShowSettings(panel === "settings" ? (v) => !v : false);
   }, []);
+
+  const askAIFromNote = useCallback((text: string) => {
+    setChatPrefill({ text, nonce: Date.now() });
+    closeAllPanels();
+    switchView("chat");
+  }, [closeAllPanels, switchView]);
 
   return (
     <div className="screen">
@@ -161,7 +170,7 @@ function WorkspacePageContent({
       {/* Content Area */}
       <div className="workspace-content">
         <div style={{ display: activeView === "chat" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
-          <ChatView key={projectName} sessionName={projectName} />
+          <ChatView key={projectName} sessionName={projectName} prefill={chatPrefill} />
         </div>
         <div style={{ display: activeView === "terminal" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
           <TerminalView key={projectName} sessionName={projectName} />
@@ -177,7 +186,7 @@ function WorkspacePageContent({
         })}
 
         {showFiles && <FileBrowser sessionName={projectName} onOpenFile={openFile} onClose={() => setShowFiles(false)} />}
-        {showNotes && <NotesPanel sessionName={projectName} onClose={() => setShowNotes(false)} />}
+        {showNotes && <NotesPanel sessionName={projectName} onClose={() => setShowNotes(false)} onAskAI={askAIFromNote} />}
         {showSettings && <ProjectSettings projectName={projectName} onClose={() => setShowSettings(false)} onDeleted={() => router.push("/projects")} />}
       </div>
     </div>

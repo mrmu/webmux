@@ -62,14 +62,23 @@ model Host {
   @@map("hosts")
 }
 
+// Notes are prompt-candidate items — atomic units sent to AI. Status tracks
+// where each sits in the loop: OPEN (draft) → IN_PROGRESS (sent) →
+// AWAITING (AI asked for info) → DONE (resolved, possibly with a PR).
+// issueId links a note that was broken down from a tracked Issue.
 model Note {
   id          Int      @id @default(autoincrement())
   sessionName String   @map("session_name")
   content     String
+  status      String   @default("OPEN")       // OPEN / IN_PROGRESS / AWAITING / DONE
+  issueId     Int?     @map("issue_id")        // optional parent Issue
+  prUrl       String   @default("") @map("pr_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   project     Project  @relation(fields: [sessionName], references: [name], onDelete: Cascade)
+  issue       Issue?   @relation(fields: [issueId], references: [id], onDelete: SetNull)
 
+  @@index([issueId])
   @@map("notes")
 }
 
@@ -102,6 +111,7 @@ model Issue {
 
   project        Project      @relation(fields: [projectName], references: [name], onDelete: Cascade)
   events         IssueEvent[]
+  notes          Note[]
 
   @@index([projectName])
   @@index([status])

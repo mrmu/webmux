@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-// Note type inferred from Prisma query
+
+type NoteRow = {
+  id: number;
+  content: string;
+  status: string;
+  issueId: number | null;
+  prUrl: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function serialize(n: NoteRow) {
+  return {
+    id: n.id,
+    content: n.content,
+    status: n.status,
+    issue_id: n.issueId,
+    pr_url: n.prUrl,
+    created_at: Math.floor(n.createdAt.getTime() / 1000),
+    updated_at: Math.floor(n.updatedAt.getTime() / 1000),
+  };
+}
+
+export const VALID_NOTE_STATUSES = ["OPEN", "IN_PROGRESS", "AWAITING", "DONE"] as const;
 
 export async function GET(
   request: NextRequest,
@@ -15,14 +38,7 @@ export async function GET(
     where: { sessionName: name },
     orderBy: { createdAt: "desc" },
   });
-  return NextResponse.json(
-    notes.map((n: { id: number; content: string; createdAt: Date; updatedAt: Date }) => ({
-      id: n.id,
-      content: n.content,
-      created_at: Math.floor(n.createdAt.getTime() / 1000),
-      updated_at: Math.floor(n.updatedAt.getTime() / 1000),
-    }))
-  );
+  return NextResponse.json(notes.map(serialize));
 }
 
 export async function POST(
@@ -51,13 +67,12 @@ export async function POST(
   });
 
   const note = await prisma.note.create({
-    data: { sessionName: name, content },
+    data: {
+      sessionName: name,
+      content,
+      ...(typeof body.issue_id === "number" && { issueId: body.issue_id }),
+    },
   });
 
-  return NextResponse.json({
-    id: note.id,
-    content: note.content,
-    created_at: Math.floor(note.createdAt.getTime() / 1000),
-    updated_at: Math.floor(note.updatedAt.getTime() / 1000),
-  });
+  return NextResponse.json(serialize(note));
 }

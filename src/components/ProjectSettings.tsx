@@ -313,24 +313,26 @@ export default function ProjectSettings({
           </h3>
           <p className="settings-hint">
             Content goes into <code>.webmux/deploy.md</code> and <code>.webmux/test.md</code>.
-            DB is source of truth; the files are regenerated.
+            DB is source of truth; files are regenerated. The pointer block
+            in CLAUDE.md / AGENTS.md tells agents to re-read these before
+            each deploy or verification.
           </p>
           <div className="form-row">
-            <label>Deploy docs</label>
+            <label>Deploy steps</label>
             <textarea
               value={deployDoc}
               onChange={(e) => setDeployDoc(e.target.value)}
-              placeholder="# Deployment&#10;&#10;Steps, commands, rollback, etc."
+              placeholder="# Deployment&#10;&#10;Commands for staging / production, rollback, cache clears, etc."
               rows={6}
               style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
             />
           </div>
           <div className="form-row">
-            <label>Test docs</label>
+            <label>Test checklist</label>
             <textarea
               value={testDoc}
               onChange={(e) => setTestDoc(e.target.value)}
-              placeholder="# Test & Verification&#10;&#10;Before / after deploy checks."
+              placeholder="# Test checklist&#10;&#10;- [ ] smoke: GET /health&#10;- [ ] login flow&#10;- [ ] one checklist item per line; the agent walks through each before marking a deploy green"
               rows={6}
               style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
             />
