@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { api } from "@/lib/api";
 
 interface ChatMessage {
@@ -109,14 +109,21 @@ export default function ChatView({
   sessionName: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Optimistic echo: messages just sent by the user, shown immediately while
+  // we wait for Claude Code to write them into JSONL and SSE to round-trip.
+  // Entries are dropped once the real message appears in `messages`.
+  const [pendingUserTexts, setPendingUserTexts] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
+  // Set on send to force scroll-to-bottom even when the user was scrolled up.
+  const forceScrollRef = useRef(false);
 
   // Clear and reload when switching projects
   useEffect(() => {
     setMessages([]);
+    setPendingUserTexts([]);
     (async () => {
       try {
         const res = await fetch(`/api/sessions/${sessionName}/chat`);
@@ -137,6 +144,16 @@ export default function ChatView({
       try {
         const data = JSON.parse(e.data);
         const msgs: ChatMessage[] = data.messages || [];
+        // Drop optimistic entries whose text has landed in the real log.
+        const realUserTexts = new Set(
+          msgs
+            .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
+            .map((m) => m.text as string)
+        );
+        setPendingUserTexts((prev) => {
+          const next = prev.filter((t) => !realUserTexts.has(t));
+          return next.length === prev.length ? prev : next;
+        });
         if (userSelectingRef.current) {
           pendingUpdateRef.current = msgs;
         } else {
@@ -182,8 +199,26 @@ export default function ChatView({
     const el = messagesRef.current;
     if (!el) return;
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-    if (isAtBottom) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    if (forceScrollRef.current || isAtBottom) {
+      el.scrollTop = el.scrollHeight;
+      forceScrollRef.current = false;
+    }
+  }, [messages, pendingUserTexts]);
+
+  // Merge real messages with pending optimistic ones for display.
+  // When nothing is pending, returns the same reference as `messages` so
+  // the memoized MessageList can skip re-rendering on unrelated updates.
+  const displayMessages = useMemo<ChatMessage[]>(() => {
+    if (pendingUserTexts.length === 0) return messages;
+    return [
+      ...messages,
+      ...pendingUserTexts.map((text) => ({
+        role: "user",
+        content_type: "text",
+        text,
+      })),
+    ];
+  }, [messages, pendingUserTexts]);
 
   const [sendError, setSendError] = useState("");
 
@@ -203,11 +238,25 @@ export default function ChatView({
       // Can't check — send anyway
     }
 
+    // Show the user's prompt immediately and scroll so it's visible,
+    // regardless of how long the round-trip through tmux/Claude/JSONL takes.
+    forceScrollRef.current = true;
+    setPendingUserTexts((prev) => [...prev, text]);
+    setInput("");
+
     try {
       await api.post(`/api/sessions/${sessionName}/send`, { text });
-      setInput("");
     } catch {
       setSendError("Failed to send. Check the Terminal tab.");
+      // Roll back the optimistic entry — remove the first match so duplicate
+      // sends of the same text don't all vanish on a single failure.
+      setPendingUserTexts((prev) => {
+        const idx = prev.indexOf(text);
+        if (idx < 0) return prev;
+        const copy = [...prev];
+        copy.splice(idx, 1);
+        return copy;
+      });
     }
   };
 
@@ -229,7 +278,7 @@ export default function ChatView({
 
   return (
     <div className="view-panel chat-view">
-      <MessageList messages={messages} innerRef={messagesRef} />
+      <MessageList messages={displayMessages} innerRef={messagesRef} />
 
       {/* Chat Input — always visible */}
       {(
