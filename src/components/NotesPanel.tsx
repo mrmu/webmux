@@ -205,6 +205,9 @@ export default function NotesPanel({
             return (
               <div key={n.id} className={`note-card note-status-${n.status.toLowerCase()}`}>
                 <div className="note-badges">
+                  <span className="note-self-id" title={`Note #${n.id}`}>
+                    N#{n.id}
+                  </span>
                   <select
                     className={`note-status-select ${n.status.toLowerCase()}`}
                     value={n.status}
@@ -220,9 +223,9 @@ export default function NotesPanel({
                     <a
                       className="note-issue-ref clickable"
                       href={`/issues/${n.issue_id}`}
-                      title="Jump to issue"
+                      title="前往 issue"
                     >
-                      #{n.issue_id}
+                      ↗ I#{n.issue_id}
                     </a>
                   ) : (
                     <div style={{ position: "relative" }}>

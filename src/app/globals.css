@@ -826,7 +826,26 @@ select {
 .note-status-select:focus { outline: none; border-color: var(--accent); }
 .note-status-select option { background: var(--bg-card); color: var(--text); }
 
-.note-issue-ref,
+.note-self-id {
+  font-family: 'SF Mono', monospace;
+  font-size: 0.7rem;
+  color: rgba(255,255,255,0.35);
+  padding: 0.08rem 0.3rem;
+  letter-spacing: 0.02em;
+  user-select: all;
+}
+
+/* Issue reference gets a tinted pill to stand apart from the note-self-id. */
+.note-issue-ref {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(99,102,241,0.12);
+  color: #a5b4fc;
+  font-family: 'SF Mono', monospace;
+  text-decoration: none;
+}
+
 .note-pr-link {
   font-size: 0.7rem;
   padding: 0.1rem 0.45rem;

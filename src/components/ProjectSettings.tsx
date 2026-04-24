@@ -293,14 +293,26 @@ export default function ProjectSettings({
       "列出 CLAUDE.md / docs 與 webmux 目前設定不一致、或需要人決定的項目。",
       "",
       "**請不要直接修改 `.webmux/*` 檔或 CLAUDE.md**——我會看完回覆後到 webmux 設定面板手動貼上調整。",
-      "",
-      "(tracking: project-settings analysis)",
     ].join("\n");
   };
 
-  const askAIForSuggestions = () => {
+  /** Wrap the analysis in a Note first so the AI reply is captured as a
+   *  NoteExchange. The note persists in the Notes panel for re-ask / audit
+   *  even after the JSONL session gets /clear'd. */
+  const askAIForSuggestions = async () => {
     if (!onAskAI) return;
-    onAskAI(buildAnalysisPrompt());
+    const prompt = buildAnalysisPrompt();
+    try {
+      const note = await api.post(`/api/sessions/${projectName}/notes`, {
+        content: prompt,
+      });
+      // Tracking footer points at the freshly-created note so extraction
+      // links the reply automatically.
+      onAskAI(`${prompt}\n\n(tracking: note #${note.id})`);
+    } catch {
+      // Fallback: still send the prompt, just without note linkage.
+      onAskAI(prompt);
+    }
     onClose();
   };
 
