@@ -27,12 +27,14 @@ export async function POST(
     );
   }
 
-  // First non-empty line → title; rest → body. Trim title at 80 chars so it
-  // fits in an issue list without wrapping.
+  // First non-empty line → title (trimmed at 80 chars so it fits an issue
+  // list without wrapping). Body keeps the FULL note content so nothing is
+  // lost when the note was a single long paragraph (title would otherwise
+  // eat the first 80 chars and the remainder would be discarded).
   const lines = note.content.split("\n");
   const firstLine = lines.find((l) => l.trim()) || "(no title)";
   const title = firstLine.trim().slice(0, 80);
-  const body = lines.slice(lines.indexOf(firstLine) + 1).join("\n").trim();
+  const body = note.content;
 
   const issue = await prisma.issue.create({
     data: {

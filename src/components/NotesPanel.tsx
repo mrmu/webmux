@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
-import { TrashIcon } from "./icons";
+import { TrashIcon, CirclePlusIcon } from "./icons";
 
 interface Note {
   id: number;
@@ -175,13 +175,9 @@ export default function NotesPanel({
   const askAI = (n: Note) => {
     if (!onAskAI) return;
     onAskAI(formatPrefill(n));
-    // Mark as sent so status reflects "asked"; AI can flip to AWAITING/DONE
-    // later or the user can do it manually.
-    if (n.status === "OPEN") {
-      api.put(`/api/notes/${n.id}`, { status: "IN_PROGRESS" })
-        .then(loadNotes)
-        .catch(() => { /* ignore */ });
-    }
+    // Intentionally NOT flipping status here — Ask AI just prefills the chat
+    // textbox, the user may still edit or back out. Status auto-advances to
+    // IN_PROGRESS when extractNoteExchanges sees a real reply land in JSONL.
     onClose();
   };
 
@@ -296,11 +292,12 @@ export default function NotesPanel({
                     <>
                       {!n.issue_id && (
                         <button
-                          className="note-delete"
+                          className="note-delete note-action-icon"
                           onClick={() => promoteToIssue(n)}
                           title="Create a tracked Issue from this note"
                         >
-                          Promote
+                          <CirclePlusIcon />
+                          <span>Track as issue</span>
                         </button>
                       )}
                       {onAskAI && n.status !== "DONE" && (

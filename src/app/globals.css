@@ -910,6 +910,12 @@ select {
 
 .note-card.note-status-done { opacity: 0.6; }
 
+.note-action-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
 .notes-list {
   flex: 1;
   overflow-y: auto;

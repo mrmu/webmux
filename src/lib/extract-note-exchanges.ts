@@ -34,6 +34,13 @@ function extractUserText(content: unknown): string {
   return parts.join("\n").replace(RE_ANSI, "");
 }
 
+/** Claude Code writes tool results as `type: "user"` entries whose content
+ *  is a tool_result block, not human text. A real human turn is one whose
+ *  content contains at least one non-wrapper text block. */
+function isRealUserTurn(entry: JsonlEntry): boolean {
+  return extractUserText(entry.message?.content).trim().length > 0;
+}
+
 function extractAssistantText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
@@ -78,14 +85,7 @@ export async function extractNoteExchanges(projectCwd: string): Promise<number> 
   const sessions = listSessionJsonls(projectCwd);
   if (sessions.length === 0) return 0;
 
-  // Pull all known promptUuids up front so we skip already-stored ones in
-  // O(1) without round-tripping the DB for each entry.
-  const stored = await prisma.noteExchange.findMany({
-    select: { promptUuid: true },
-  });
-  const seen = new Set(stored.map((s) => s.promptUuid));
-
-  // Also cache which noteIds exist so we don't FK-fail on stale tracking tags.
+  // Cache known noteIds so we don't FK-fail on stale tracking tags.
   const noteRows = await prisma.note.findMany({ select: { id: true } });
   const knownNoteIds = new Set(noteRows.map((n) => n.id));
 
@@ -95,7 +95,7 @@ export async function extractNoteExchanges(projectCwd: string): Promise<number> 
     const entries = readJsonl(session.path);
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
-      if (e.type !== "user" || !e.uuid || seen.has(e.uuid)) continue;
+      if (e.type !== "user" || !e.uuid) continue;
 
       const userText = extractUserText(e.message?.content);
       const match = userText.match(TRACKING_RE);
@@ -104,11 +104,15 @@ export async function extractNoteExchanges(projectCwd: string): Promise<number> 
       const noteId = parseInt(match[1]);
       if (!knownNoteIds.has(noteId)) continue;
 
-      // Collect every assistant text block up to the next user message.
+      // Collect every assistant text block up to the next REAL human turn.
+      // `user`-typed entries carrying only tool_result blocks are emitted
+      // between assistant chunks during tool use — treating them as a
+      // boundary would truncate the reply right after the first text block
+      // before the first tool call.
       const replyParts: string[] = [];
       for (let j = i + 1; j < entries.length; j++) {
         const next = entries[j];
-        if (next.type === "user") break;
+        if (next.type === "user" && isRealUserTurn(next)) break;
         if (next.type !== "assistant") continue;
         const asstText = extractAssistantText(next.message?.content);
         if (asstText) replyParts.push(asstText);
@@ -118,9 +122,16 @@ export async function extractNoteExchanges(projectCwd: string): Promise<number> 
       // Skip for now — next extraction pass will pick it up once complete.
       if (replyParts.length === 0) continue;
 
+      // Upsert so re-running extraction on the same session picks up any
+      // newly arrived assistant text at the tail (the run may finish after
+      // an earlier partial extraction ran).
       try {
-        await prisma.noteExchange.create({
-          data: {
+        await prisma.noteExchange.upsert({
+          where: { promptUuid: e.uuid },
+          update: {
+            reply: replyParts.join("\n\n"),
+          },
+          create: {
             noteId,
             sessionId: session.sessionId,
             promptUuid: e.uuid,
@@ -129,7 +140,14 @@ export async function extractNoteExchanges(projectCwd: string): Promise<number> 
             reply: replyParts.join("\n\n"),
           },
         });
-        seen.add(e.uuid);
+        // Auto-flip status OPEN → IN_PROGRESS when the first exchange for
+        // a note lands. This replaces the premature flip that NotesPanel
+        // used to do on Ask-AI click — if the user backed out without
+        // sending, no exchange appears and the note stays OPEN.
+        await prisma.note.updateMany({
+          where: { id: noteId, status: "OPEN" },
+          data: { status: "IN_PROGRESS" },
+        });
         added++;
       } catch {
         // Unique violation = race with another pass, safe to ignore.
