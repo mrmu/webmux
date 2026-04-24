@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  allowedDevOrigins: ["webmux.test"],
+  allowedDevOrigins: ["comux.test"],
   generateBuildId: async () => {
     return `build-${Date.now()}`;
   },

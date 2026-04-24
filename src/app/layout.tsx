@@ -2,12 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "webmux",
+  title: "comux",
   description: "AI-Ops Development Platform",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "webmux",
+    title: "comux",
   },
 };
 

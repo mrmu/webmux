@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncWebmuxDir } from "@/lib/sync-webmux-dir";
+import { syncComuxDir } from "@/lib/sync-comux-dir";
 
 export async function PUT(
   request: NextRequest,
@@ -23,7 +23,7 @@ export async function PUT(
     },
   });
 
-  await syncWebmuxDir(name);
+  await syncComuxDir(name);
   return NextResponse.json(host);
 }
 
@@ -36,6 +36,6 @@ export async function DELETE(
 
   const { name, id } = await params;
   await prisma.host.delete({ where: { id: parseInt(id) } });
-  await syncWebmuxDir(name);
+  await syncComuxDir(name);
   return NextResponse.json({ ok: true });
 }

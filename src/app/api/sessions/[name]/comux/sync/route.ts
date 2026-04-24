@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { syncWebmuxDir } from "@/lib/sync-webmux-dir";
+import { syncComuxDir } from "@/lib/sync-comux-dir";
 
-/** Manual re-sync of `.webmux/` — useful when a project existed before this
+/** Manual re-sync of `.comux/` — useful when a project existed before this
  *  feature shipped, or after someone manually deleted the directory. */
 export async function POST(
   request: NextRequest,
@@ -12,6 +12,6 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { name } = await params;
-  await syncWebmuxDir(name);
+  await syncComuxDir(name);
   return NextResponse.json({ ok: true });
 }

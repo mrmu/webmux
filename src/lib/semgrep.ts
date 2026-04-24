@@ -18,7 +18,7 @@ export const SEMGREP_IMAGE = "semgrep/semgrep:latest";
 export const SEMGREP_CONFIG = "p/default";
 export const SCAN_ROOT = path.join(
   process.env.HOME || "/Users/audilu",
-  "webmux-scans"
+  "comux-scans"
 );
 
 export interface RawFinding {

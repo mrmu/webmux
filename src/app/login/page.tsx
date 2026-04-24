@@ -51,7 +51,7 @@ export default function LoginPage() {
     return (
       <div className="screen">
         <div className="login-container">
-          <h1 className="logo">webmux</h1>
+          <h1 className="logo">comux</h1>
           <div className="spinner" />
         </div>
       </div>
@@ -61,7 +61,7 @@ export default function LoginPage() {
   return (
     <div className="screen">
       <div className="login-container">
-        <h1 className="logo">webmux</h1>
+        <h1 className="logo">comux</h1>
         <p className="login-subtitle">
           {isFirstUser ? "Create admin account" : "Sign in to continue"}
         </p>

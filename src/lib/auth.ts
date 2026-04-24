@@ -5,8 +5,8 @@ import { NextRequest } from "next/server";
 import { prisma } from "./db";
 
 const JWT_SECRET =
-  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
-const COOKIE_NAME = "webmux_token";
+  process.env.COMUX_SECRET || "dev-secret-change-in-production";
+const COOKIE_NAME = "comux_token";
 
 interface JwtPayload {
   userId: number;

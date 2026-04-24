@@ -155,10 +155,10 @@ export default function ProjectSettings({
     setSaving(false);
   };
 
-  const syncWebmux = async () => {
+  const syncComux = async () => {
     setSyncBusy(true);
     try {
-      await api.post(`/api/sessions/${projectName}/webmux/sync`, {});
+      await api.post(`/api/sessions/${projectName}/comux/sync`, {});
       await loadProject();
       await loadClaudeMd();
     } catch { /* ignore */ }
@@ -179,7 +179,7 @@ export default function ProjectSettings({
       name: "本機",
       ssh_target: "localhost",
       env: "production",
-      description: "專案就跑在這台 webmux 主機上，部署指令直接執行、不用 SSH",
+      description: "專案就跑在這台 comux 主機上，部署指令直接執行、不用 SSH",
     });
   };
 
@@ -282,7 +282,7 @@ export default function ProjectSettings({
     // a non-engineer user can act on.
     if (/EACCES/i.test(raw)) {
       const m = raw.match(/open\s+'([^']+)'/);
-      return `權限被拒：webmux 無法寫入 ${m ? m[1] : "此檔"}。請在主機上 ${
+      return `權限被拒：comux 無法寫入 ${m ? m[1] : "此檔"}。請在主機上 ${
         m ? `\`chown devops ${m[1]}\`` : "修改檔案擁有者"
       } 後重試。`;
     }
@@ -298,7 +298,7 @@ export default function ProjectSettings({
   };
 
   /** Build a structured analysis prompt for the Chat tab. Includes the
-   *  current webmux settings so the AI knows what's already in place and
+   *  current comux settings so the AI knows what's already in place and
    *  can point out conflicts vs. what's written in CLAUDE.md / docs. */
   const buildAnalysisPrompt = (): string => {
     const hostsList = hosts.length
@@ -310,7 +310,7 @@ export default function ProjectSettings({
           .join("\n")
       : "  (無)";
     return [
-      "請幫我盤點這個專案的既有文件，建議如何把內容整理到 webmux 的專案設定。",
+      "請幫我盤點這個專案的既有文件，建議如何把內容整理到 comux 的專案設定。",
       "",
       "## 請讀取並分析",
       "- `CLAUDE.md`、`AGENTS.md`（若存在）",
@@ -318,15 +318,15 @@ export default function ProjectSettings({
       "- `README.md` 的部署段落",
       "- `scripts/` 下的部署腳本",
       "",
-      "## webmux 目前的設定",
+      "## comux 目前的設定",
       "",
-      "### Deploy steps（會寫入 `.webmux/deploy.md`）",
+      "### Deploy steps（會寫入 `.comux/deploy.md`）",
       deployDoc ? "```\n" + deployDoc + "\n```" : "(空)",
       "",
-      "### Test checklist（會寫入 `.webmux/test.md`）",
+      "### Test checklist（會寫入 `.comux/test.md`）",
       testDoc ? "```\n" + testDoc + "\n```" : "(空)",
       "",
-      "### Hosts（會寫入 `.webmux/hosts.md`）",
+      "### Hosts（會寫入 `.comux/hosts.md`）",
       hostsList,
       "",
       "## 請以下列結構回覆",
@@ -341,9 +341,9 @@ export default function ProjectSettings({
       "逐條列出新增 / 修改 / 刪除的 host，並引用來源檔的相關片段說明原因。",
       "",
       "### 衝突與需人工判斷的地方",
-      "列出 CLAUDE.md / docs 與 webmux 目前設定不一致、或需要人決定的項目。",
+      "列出 CLAUDE.md / docs 與 comux 目前設定不一致、或需要人決定的項目。",
       "",
-      "**請不要直接修改 `.webmux/*` 檔或 CLAUDE.md**——我會看完回覆後到 webmux 設定面板手動貼上調整。",
+      "**請不要直接修改 `.comux/*` 檔或 CLAUDE.md**——我會看完回覆後到 comux 設定面板手動貼上調整。",
     ].join("\n");
   };
 
@@ -422,7 +422,7 @@ export default function ProjectSettings({
             {saving ? "儲存中..." : "儲存變更"}
           </button>
           <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
-            儲存會同步更新到 <code>.webmux/project.md</code>，供 AI agent 讀取。
+            儲存會同步更新到 <code>.comux/project.md</code>，供 AI agent 讀取。
           </p>
         </div>
 
@@ -430,7 +430,7 @@ export default function ProjectSettings({
         <section className="settings-section">
           <h3>部署主機</h3>
           <p className="settings-hint">
-            每個環境對應的 SSH 目標。儲存後會自動寫入 <code>.webmux/hosts.md</code>，
+            每個環境對應的 SSH 目標。儲存後會自動寫入 <code>.comux/hosts.md</code>，
             AI agent 部署前會讀取判斷要 SSH 過去還是直接在本機執行。
           </p>
           {hosts.length === 0 ? (
@@ -464,7 +464,7 @@ export default function ProjectSettings({
                     />
                     <input
                       type="text"
-                      placeholder="描述（選填，會寫入 .webmux/hosts.md）"
+                      placeholder="描述（選填，會寫入 .comux/hosts.md）"
                       value={hostDraft.description}
                       onChange={(e) => setHostDraft({ ...hostDraft, description: e.target.value })}
                     />
@@ -536,17 +536,17 @@ export default function ProjectSettings({
               type="button"
               title="一鍵填入本機主機設定"
             >
-              + 專案在這台 webmux 主機
+              + 專案在這台 comux 主機
             </button>
           </div>
         </section>
 
-        {/* .webmux/ docs — DB-backed, regenerates the files on save */}
+        {/* .comux/ docs — DB-backed, regenerates the files on save */}
         <section className="settings-section">
           <h3>
             專案文件
             <button
-              onClick={syncWebmux}
+              onClick={syncComux}
               disabled={syncBusy}
               style={{
                 marginLeft: "0.75rem",
@@ -558,14 +558,14 @@ export default function ProjectSettings({
                 color: "var(--text-muted)",
                 cursor: "pointer",
               }}
-              title="依 DB 內容重新生成 .webmux/ 下所有檔案"
+              title="依 DB 內容重新生成 .comux/ 下所有檔案"
             >
-              {syncBusy ? "同步中..." : "同步 .webmux/"}
+              {syncBusy ? "同步中..." : "同步 .comux/"}
             </button>
           </h3>
           <p className="settings-hint">
-            下方內容會寫入 <code>.webmux/deploy.md</code> 與 <code>.webmux/test.md</code>。
-            DB 才是真實來源，檔案每次儲存會重新生成。按「同步 .webmux/」只是手動重跑一次，
+            下方內容會寫入 <code>.comux/deploy.md</code> 與 <code>.comux/test.md</code>。
+            DB 才是真實來源，檔案每次儲存會重新生成。按「同步 .comux/」只是手動重跑一次，
             不會改動任何 DB 內容；用在現有檔案被刪或想確認重生。
           </p>
           {onAskAI && (
@@ -616,7 +616,7 @@ export default function ProjectSettings({
               {saving ? "儲存中..." : "儲存文件"}
             </button>
             <p className="settings-hint" style={{ marginTop: "0.3rem" }}>
-              儲存會：寫入 DB → 立刻重新生成 <code>.webmux/deploy.md</code> / <code>test.md</code>，
+              儲存會：寫入 DB → 立刻重新生成 <code>.comux/deploy.md</code> / <code>test.md</code>，
               agent 下次讀就是新內容。不會動 git commit 或推任何地方。
             </p>
           </div>
@@ -648,7 +648,7 @@ export default function ProjectSettings({
           </h3>
           <p className="settings-hint">
             在各家 AI agent 的初始檔（<code>CLAUDE.md</code>、<code>AGENTS.md</code>）底部
-            加一段指向 <code>.webmux/</code> 的區塊，告訴 agent 部署 / 測試前要重讀那些檔。
+            加一段指向 <code>.comux/</code> 的區塊，告訴 agent 部署 / 測試前要重讀那些檔。
             檔案不存在會幫你建立。
           </p>
           <div style={{ marginBottom: "0.5rem" }}>

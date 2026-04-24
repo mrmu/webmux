@@ -1,6 +1,6 @@
 # Issue Workflow 設計
 
-本文記錄 webmux Issue tracker 的目標工作流（Phase 2），尚未全部實作完成。
+本文記錄 comux Issue tracker 的目標工作流（Phase 2），尚未全部實作完成。
 Phase 1 已完成的部分見 `prisma/schema.prisma` 的 `Issue` / `IssueEvent` model。
 
 最後更新：2026-04-22
@@ -135,11 +135,11 @@ AI Dev 的實作順序：
 
 - 需要 Jira API token + Jira workspace URL（等使用者提供）
 - 手動按鈕觸發（不定期輪詢）：「Sync from Jira」
-- 拉 Jira issue → 建 webmux Issue，欄位：
+- 拉 Jira issue → 建 comux Issue，欄位：
   - `source = EXTERNAL_SYNC`
   - `sourceRef = <Jira Key>`（e.g. `MV-123`）
   - `title` / `body` / `severity` 從 Jira 映射
-- webmux 對這些 Issue 是唯讀（不反向寫回 Jira）
+- comux 對這些 Issue 是唯讀（不反向寫回 Jira）
 
 ---
 
@@ -154,7 +154,7 @@ AI Dev 的實作順序：
 
 ### 不做 @mention 通知
 
-- 目前 webmux 是單人使用，先略過
+- 目前 comux 是單人使用，先略過
 - 未來多人時再考慮：站內通知 / email / Slack webhook
 
 ---
@@ -162,7 +162,7 @@ AI Dev 的實作順序：
 ## 8. Open questions（待實作前再決定）
 
 - feature branch merge 到 develop 用 merge commit (`--no-ff`) 還是 squash？
-- stage 環境怎麼部署？現有 CI？ 還是 webmux 自己 SSH 部署？
+- stage 環境怎麼部署？現有 CI？ 還是 comux 自己 SSH 部署？
 - `TEST_FAILED` → `IN_DEVELOPMENT` 轉回來，要不要同時 revert 那次部署到 stage 的 commit？
 - 一個 Issue 一個 tmux session，session 名字怎麼取？`issue-<id>`？
 - PM = AI 時，「stage 驗收」要 AI 會看網站 / 跑 E2E？還是 PM 一定是真人？

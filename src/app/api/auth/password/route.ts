@@ -3,10 +3,10 @@ import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
+const JWT_SECRET = process.env.COMUX_SECRET || "dev-secret-change-in-production";
 
 export async function PUT(request: NextRequest) {
-  const token = request.cookies.get("webmux_token")?.value;
+  const token = request.cookies.get("comux_token")?.value;
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let userId: number;

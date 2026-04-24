@@ -1,4 +1,4 @@
-# webmux
+# comux
 
 給 Claude Code 用的網頁版 tmux session 管理工具。用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案。
 
@@ -14,12 +14,12 @@
 
 ## 架構（白話版）
 
-webmux 是一個「半容器化」的架構：
+comux 是一個「半容器化」的架構：
 
 ```
                                     宿主機 (Linux VPS)
                                     ┌─────────────────────────────┐
- 瀏覽器 → nginx-proxy ─┐            │  webmux (Node, port 3000)   │
+ 瀏覽器 → nginx-proxy ─┐            │  comux (Node, port 3000)   │
          + acme(SSL)   │            │  ├─ Next.js + API           │
                        │            │  ├─ Terminal WebSocket      │
                    ┌───▼─────────┐  │  └─ 讀寫 tmux / claude / ssh │
@@ -36,11 +36,11 @@ webmux 是一個「半容器化」的架構：
 
 **重點：**
 
-- webmux 本體（Next.js + WebSocket）**直接跑在宿主機 port 3000**，**沒有容器化**，用 systemd 管理。
+- comux 本體（Next.js + WebSocket）**直接跑在宿主機 port 3000**，**沒有容器化**，用 systemd 管理。
 - 另外起一個**很薄的 socat 容器**掛在 `wp-proxy` network 上，它只做一件事：把流量從 nginx-proxy 轉派給宿主機的 3000 port。
 - 這個 socat 容器帶著 `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 環境變數，讓 nginx-proxy-automation + acme-companion 自動簽 / 續 Let's Encrypt 憑證。
 - PostgreSQL 也是容器跑，port 5432 只綁 `127.0.0.1`，不對外開放。
-- 因為 webmux 直接在宿主機上用 devops user 身份執行，所以**天生就能用宿主機的 Claude Code、SSH keys、tmux socket、`~/.claude/`** — 不需要做 UID mapping、pid:host、home mount 這些脆弱的容器 hack。
+- 因為 comux 直接在宿主機上用 devops user 身份執行，所以**天生就能用宿主機的 Claude Code、SSH keys、tmux socket、`~/.claude/`** — 不需要做 UID mapping、pid:host、home mount 這些脆弱的容器 hack。
 
 一句話：**享有 nginx-proxy 自動 SSL 的好處 + 享有宿主機原生權限的能力，兩邊都要。**
 
@@ -54,9 +54,9 @@ webmux 是一個「半容器化」的架構：
 
 ```bash
 # 前置：Node 22、tmux、git、docker 都裝好；Claude Code 已 OAuth 登入
-git clone git@github.com:mrmu/webmux.git ~/webmux && cd ~/webmux
+git clone git@github.com:mrmu/comux.git ~/comux && cd ~/comux
 
-# 設定環境變數（DATABASE_URL、WEBMUX_SECRET、VIRTUAL_HOST 等）
+# 設定環境變數（DATABASE_URL、COMUX_SECRET、VIRTUAL_HOST 等）
 cp .env.example .env && nano .env
 
 # Build + 起 DB 和 socat proxy
@@ -65,18 +65,18 @@ docker network create wp-proxy 2>/dev/null || true
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 npm run db:push
 
-# 用 systemd 管 webmux 本體
-sudo cp docs/deploy/webmux.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now webmux
+# 用 systemd 管 comux 本體
+sudo cp docs/deploy/comux.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now comux
 
-# 開瀏覽器進 https://webmux.yoursite.com，第一次會請你建 admin 帳號
+# 開瀏覽器進 https://comux.yoursite.com，第一次會請你建 admin 帳號
 ```
 
 ### 更新
 
 ```bash
-cd ~/webmux && git pull && npm ci && npm run build
-sudo systemctl restart webmux
+cd ~/comux && git pull && npm ci && npm run build
+sudo systemctl restart comux
 # tmux session 不受影響（它是獨立 daemon）
 ```
 
@@ -84,7 +84,7 @@ sudo systemctl restart webmux
 
 ```bash
 docker compose up -d db dev-proxy   # DB + nginx-proxy 轉發橋接
-npm run dev                         # http://webmux.test
+npm run dev                         # http://comux.test
 ```
 
 `npm run dev` 同時跑 Next.js（port 3000）+ Terminal WebSocket（port 3001）。
@@ -97,7 +97,7 @@ npm run dev                         # http://webmux.test
 | `server.ts` | Dev 用的 Next.js + WebSocket 客製伺服器 |
 | `ws-server.ts` | Terminal WebSocket 實作（PTY → `tmux attach-session`） |
 | `docker-compose.production.yml` | 正式機：只起 DB + socat proxy，app 停用 |
-| `docs/deploy/webmux.service` | systemd unit file（跑 `node prod-server.js`） |
+| `docs/deploy/comux.service` | systemd unit file（跑 `node prod-server.js`） |
 | `docs/deploy/setup.md` | 完整部署指南 |
 | `src/lib/tmux.ts` | tmux 指令封裝 |
 | `src/lib/cloudflare.ts` | Cloudflare DNS API |

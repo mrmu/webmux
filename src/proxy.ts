@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.WEBMUX_SECRET || "dev-secret-change-in-production"
+  process.env.COMUX_SECRET || "dev-secret-change-in-production"
 );
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/register", "/api/auth/check"];
@@ -21,7 +21,7 @@ export async function proxy(request: NextRequest) {
 
   // Root → redirect based on auth
   if (pathname === "/") {
-    const token = request.cookies.get("webmux_token")?.value;
+    const token = request.cookies.get("comux_token")?.value;
     if (token && (await isValidToken(token))) {
       return NextResponse.redirect(new URL("/projects", request.url));
     }
@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get("webmux_token")?.value;
+  const token = request.cookies.get("comux_token")?.value;
   if (!token || !(await isValidToken(token))) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

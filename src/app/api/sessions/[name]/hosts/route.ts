@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncWebmuxDir } from "@/lib/sync-webmux-dir";
+import { syncComuxDir } from "@/lib/sync-comux-dir";
 
 export async function GET(
   request: NextRequest,
@@ -51,7 +51,7 @@ export async function POST(
     },
   });
 
-  await syncWebmuxDir(name);
+  await syncComuxDir(name);
 
   return NextResponse.json(host);
 }

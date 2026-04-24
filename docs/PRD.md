@@ -1,8 +1,8 @@
-# Webmux
+# Comux
 
 ## **1. 專案目標**
 
-WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。透過封裝 **Claude Code (Max Plan)**、**Tmux** 與 **Cloud API**，實現跨裝置（手機/桌面）的持久化開發環境。其核心價值在於「知識與憑證解耦」，讓 AI Agent 能在受控的環境下，自主完成從代碼開發到基礎設施部署的全流程工作。
+Comux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。透過封裝 **Claude Code (Max Plan)**、**Tmux** 與 **Cloud API**，實現跨裝置（手機/桌面）的持久化開發環境。其核心價值在於「知識與憑證解耦」，讓 AI Agent 能在受控的環境下，自主完成從代碼開發到基礎設施部署的全流程工作。
 
 ---
 
@@ -24,7 +24,7 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 ### **B. AI Agent 整合與指令攔截**
 
 - **核心引擎**：原生驅動 Claude Code CLI。
-- **安全護欄 (Guardrails)**：WebMux 後端實時監控終端輸出入。針對 rm -rf, gcloud delete, cf-delete 等高風險指令，強制觸發 Web UI 人工確認。
+- **安全護欄 (Guardrails)**：Comux 後端實時監控終端輸出入。針對 rm -rf, gcloud delete, cf-delete 等高風險指令，強制觸發 Web UI 人工確認。
 
 ### **C. Web IDE 與 記憶層 (Memory Layer)**
 
@@ -39,7 +39,7 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 - **Cloud API 整合**：
   - **Cloudflare**：動態建立 DNS 指向，管理 \*.dev 網域。
   - **GCP CLI**：透過封裝指令，讓 AI 能動態建立 VM、部署 Cloud Run。
-- **憑證管理 (Vault)**：由 WebMux 管理 API Token 與 SSH Key，動態注入環境變數，禁止代碼目錄出現明文憑證。
+- **憑證管理 (Vault)**：由 Comux 管理 API Token 與 SSH Key，動態注入環境變數，禁止代碼目錄出現明文憑證。
 
 ---
 
@@ -48,7 +48,7 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 | **目錄/組件**         | **版控狀態** | **內容與用途**                                         |
 | --------------------- | ------------ | ------------------------------------------------------ |
 | **.claudedoc/**       | **進入版控** | 專案規格、部署 Metadata、AI 指令範本。                 |
-| **.webmux/**          | **進入版控** | 標準化部署腳本（使用變數而非寫死資訊）。               |
+| **.comux/**          | **進入版控** | 標準化部署腳本（使用變數而非寫死資訊）。               |
 | **.claudecodeignore** | **進入版控** | 排除 refs/、敏感 Log、個人臨時筆記。                   |
 | **Vault (系統級)**    | **不進版控** | 儲存 Cloudflare Token, GCP Service Account, SSH Keys。 |
 
@@ -56,9 +56,9 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 
 ## **5. 工作流 (Workflow)**
 
-1. **初始化**：開發者開起 Session，WebMux 從 Vault 注入該專案所需的 SSH Key 與 API Token。
-2. **AI 開發**：透過 WebMux 操作 Claude Code，AI 參考 .claudedoc/ 規範進行開發與本地測試。
-3. **基礎設施操作**：指令如「幫我開一個新的測試環境」，WebMux 調用 gcloud 與 Cloudflare 腳本並要求開發者點擊「確認」。
+1. **初始化**：開發者開起 Session，Comux 從 Vault 注入該專案所需的 SSH Key 與 API Token。
+2. **AI 開發**：透過 Comux 操作 Claude Code，AI 參考 .claudedoc/ 規範進行開發與本地測試。
+3. **基礎設施操作**：指令如「幫我開一個新的測試環境」，Comux 調用 gcloud 與 Cloudflare 腳本並要求開發者點擊「確認」。
 4. **提交與弱掃**：
    - 開發者發起 PR。
    - CI 自動觸發 **Semgrep** (SAST) 與 **Gitleaks** 掃描。
@@ -71,7 +71,7 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 ### **階段一：基礎設施與安全性 (Week 1-2)**
 
 - [ ] 建立 GCP VM 模板（內建 Tailscale, Docker, gcloud, Claude Code）。
-- [ ] 實作 WebMux 後端與 Tmux 的 API 對接（啟動、重連、關閉）。
+- [ ] 實作 Comux 後端與 Tmux 的 API 對接（啟動、重連、關閉）。
 - [ ] 配置 Tailscale 與防火牆，確保 Web UI 僅內網可見。
 
 ### **階段二：編輯器與知識庫 (Week 3)**
@@ -94,7 +94,7 @@ WebMux 旨在打造一個高度整合的 AI 開發與運維（AI-Ops）平台。
 - **數據隱私**：務必檢查並關閉所有開發者帳號的「AI 模型訓練」選項。
 - **手機適配**：針對終端操作設計「快捷常用鍵」列，提升行動端操作體驗。
 
-ref: https://github.com/windmill-labs/webmux 這個要做的事好像跟我們系統想做的很像
+ref: https://github.com/windmill-labs/comux 這個要做的事好像跟我們系統想做的很像
 
 ## 加入 Tailscale:
 

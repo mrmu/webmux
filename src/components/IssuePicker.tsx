@@ -23,7 +23,7 @@ function suggestTitle(text: string, maxChars = 100): string {
   const clean = text.trim().replace(/\s+/g, " ");
   if (!clean) return "";
   // ASCII `.!?` only count as a terminator when followed by whitespace —
-  // otherwise "produces .webmux/*.md" becomes three "sentences". CJK
+  // otherwise "produces .comux/*.md" becomes three "sentences". CJK
   // terminators (。！？) are unambiguous and split regardless.
   const parts = clean
     .split(/(?:(?<=[.!?])\s+|(?<=[。！？])\s*)/)

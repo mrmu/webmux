@@ -1,10 +1,10 @@
-# webmux
+# comux
 
 AI-Ops development platform — web-based tmux session manager with Claude Code integration.
 
 ## Repository
 
-GitHub: `git@github.com:mrmu/webmux.git`
+GitHub: `git@github.com:mrmu/comux.git`
 
 ## Architecture
 
@@ -12,18 +12,18 @@ GitHub: `git@github.com:mrmu/webmux.git`
 Host (Linux VPS / macOS)
 ├── tmux server              ← session 持久化
 ├── Claude Code CLI          ← 已安裝、已認證 (Max Plan)
-├── webmux (Next.js + WS)    ← Node 直接跑在 host (systemd in prod, `npm run dev` in dev)
+├── comux (Next.js + WS)    ← Node 直接跑在 host (systemd in prod, `npm run dev` in dev)
 ├── {projectsRoot}/          ← 所有專案目錄 (DB 設定)
 └── ~/.claude/               ← Claude Code 認證 + 設定
 
 Docker (只跑輔助服務)
 ├── PostgreSQL               ← 專案 metadata、用戶帳號、settings
-└── webmux-proxy (socat)     ← 註冊 VIRTUAL_HOST 給 nginx-proxy，轉發到 host:3000
+└── comux-proxy (socat)     ← 註冊 VIRTUAL_HOST 給 nginx-proxy，轉發到 host:3000
                                (讓 acme-companion 自動簽 Let's Encrypt 憑證)
 ```
 
-- webmux 本體**不跑在容器裡** — host 直接跑 Node，這樣才能直接存取 tmux socket、
-  Claude Code 認證、SSH keys、`~/.claude/` 等檔案。早期把 webmux 塞容器再用
+- comux 本體**不跑在容器裡** — host 直接跑 Node，這樣才能直接存取 tmux socket、
+  Claude Code 認證、SSH keys、`~/.claude/` 等檔案。早期把 comux 塞容器再用
   `pid: host` + UID/GID override + home mount 假冒 host user 的做法已棄用。
 - Docker 只負責 DB 和一個薄 socat proxy 讓 nginx-proxy-automation 能掃到
   `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 自動簽憑證。
@@ -51,12 +51,12 @@ docker compose up -d db dev-proxy
 # 啟動 dev server (Next.js + terminal WS)
 npm run dev
 
-# 開啟 http://webmux.test
+# 開啟 http://comux.test
 # 首次使用會要求建立 admin 帳號 + 設定專案目錄
 ```
 
 - `npm run dev` 跑兩個進程：Next.js (port 3000) + terminal WebSocket (port 3001)
-- `dev-proxy` (socat) 讓 nginx-proxy 把 webmux.test 轉到 host 的 port 3000
+- `dev-proxy` (socat) 讓 nginx-proxy 把 comux.test 轉到 host 的 port 3000
 
 ## Production 部署
 
@@ -68,7 +68,7 @@ nginx-proxy-automation 透過 socat 容器的 `VIRTUAL_HOST` 自動簽 Let's Enc
 
 | 用途 | 網址 | SSH |
 |------|------|-----|
-| 個人專案 | https://webmux.audilu.com | `devops@linode-audi-inv` (Tailscale，需要時 `sudo su` 切 root) |
+| 個人專案 | https://comux.audilu.com | `devops@linode-audi-inv` (Tailscale，需要時 `sudo su` 切 root) |
 | 泛科專案 | — | 尚未完成設定 |
 
 ## Commands
@@ -130,3 +130,15 @@ docs/deploy/        # Deployment guide
 - Restore 不自動執行 DB 中的 command
 
 ## 每次修改都要先測試，前後端都要，然後確認功能正常。
+
+## Project Settings (managed by comux)
+
+Project-level configuration lives in [`.comux/`](.comux/).
+**Before deploying, testing, or reasoning about hosts, re-read these
+files** — they may have been updated via the comux UI since you last
+loaded them. Do not rely on earlier snapshots.
+
+- [`.comux/project.md`](.comux/project.md) — project overview (auto)
+- [`.comux/hosts.md`](.comux/hosts.md) — deployment hosts (auto)
+- [`.comux/deploy.md`](.comux/deploy.md) — deployment steps
+- [`.comux/test.md`](.comux/test.md) — test checklist; walk every item and mark a deploy green only when all pass
