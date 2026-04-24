@@ -3,11 +3,12 @@
 </p>
 
 <p align="center">
-  <strong>給 Claude Code 用的網頁版 tmux session 管理工具</strong>
+  <strong>給 CLI AI coding agent 用的網頁版 tmux session 管理工具</strong>
 </p>
 
 <p align="center">
-  用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案
+  用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案<br />
+  <sub>相容 Claude Code、OpenAI Codex、Gemini CLI 等跑在 tmux 裡的 CLI agent</sub>
 </p>
 
 <p align="center">
@@ -22,7 +23,7 @@
 ## 能做什麼
 
 - **Terminal** — xterm.js 透過 PTY 接宿主機的 tmux（真的終端機，不是模擬）
-- **Chat** — 解析 Claude Code 的 JSONL 對話記錄，SSE 即時推播訊息
+- **Chat** — 解析 agent 的對話記錄並以 SSE 即時推播（目前支援 Claude Code JSONL；Codex、Gemini CLI 規劃中）
 - **Files** — 瀏覽、編輯專案檔案
 - **Projects** — 一個專案對應一個 tmux session，session 裡可以開多個 window
 - **Hosts** — 記錄每個專案的部署目標（SSH / Tailscale 機器）
@@ -39,9 +40,9 @@ comux 是一個「半容器化」的架構：
  瀏覽器 → nginx-proxy ─┐            │  comux (Node, port 3000)   │
          + acme(SSL)   │            │  ├─ Next.js + API           │
                        │            │  ├─ Terminal WebSocket      │
-                   ┌───▼─────────┐  │  └─ 讀寫 tmux / claude / ssh │
+                   ┌───▼─────────┐  │  └─ 讀寫 tmux / agent / ssh  │
                    │socat 容器    │─▶│                             │
-                   │(wp-proxy net)│  │  tmux + Claude Code         │
+                   │(wp-proxy net)│  │  tmux + AI agent CLI        │
                    └─────────────┘  │  (以 devops user 身份跑)     │
                                     │                             │
                                     │  ┌────────────────────┐     │
@@ -57,11 +58,11 @@ comux 是一個「半容器化」的架構：
 - 另外起一個**很薄的 socat 容器**掛在 `wp-proxy` network 上，它只做一件事：把流量從 nginx-proxy 轉派給宿主機的 3000 port。
 - 這個 socat 容器帶著 `VIRTUAL_HOST` / `LETSENCRYPT_HOST` 環境變數，讓 nginx-proxy-automation + acme-companion 自動簽 / 續 Let's Encrypt 憑證。
 - PostgreSQL 也是容器跑，port 5432 只綁 `127.0.0.1`，不對外開放。
-- 因為 comux 直接在宿主機上用 devops user 身份執行，所以**天生就能用宿主機的 Claude Code、SSH keys、tmux socket、`~/.claude/`** — 不需要做 UID mapping、pid:host、home mount 這些脆弱的容器 hack。
+- 因為 comux 直接在宿主機上用 devops user 身份執行，所以**天生就能用宿主機的 AI agent CLI、SSH keys、tmux socket、和 agent 的 config/認證目錄**（`~/.claude/`、`~/.codex/`、`~/.gemini/` 等）— 不需要做 UID mapping、pid:host、home mount 這些脆弱的容器 hack。
 
 一句話：**享有 nginx-proxy 自動 SSL 的好處 + 享有宿主機原生權限的能力，兩邊都要。**
 
-（為什麼不全容器化：早期版本有做過 `pid: host` + UID/GID mount + `~/` mount 去假冒 host user，結果 Claude Code 一更新或路徑一變就壞掉，改回直接跑 host 穩定得多。）
+（為什麼不全容器化：早期版本有做過 `pid: host` + UID/GID mount + `~/` mount 去假冒 host user，結果 agent CLI 一更新或路徑一變就壞掉，改回直接跑 host 穩定得多。）
 
 ## 快速開始
 
@@ -70,7 +71,7 @@ comux 是一個「半容器化」的架構：
 詳細步驟見 [`docs/deploy/setup.md`](docs/deploy/setup.md)。摘要：
 
 ```bash
-# 前置：Node 22、tmux、git、docker 都裝好；Claude Code 已 OAuth 登入
+# 前置：Node 22、tmux、git、docker 都裝好；要用的 AI agent CLI (Claude Code / Codex / Gemini CLI / ...) 已登入認證
 git clone git@github.com:mrmu/comux.git ~/comux && cd ~/comux
 
 # 設定環境變數（DATABASE_URL、COMUX_SECRET、VIRTUAL_HOST 等）
