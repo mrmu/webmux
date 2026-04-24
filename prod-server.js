@@ -23,7 +23,7 @@ process.env.__NEXT_PRIVATE_STANDALONE_CONFIG = JSON.stringify(nextConfig);
 
 const jwt = require("jsonwebtoken");
 const JWT_SECRET =
-  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
+  process.env.COMUX_SECRET || "dev-secret-change-in-production";
 
 function verifyToken(token) {
   try {
@@ -126,7 +126,7 @@ async function main() {
       }
 
       // Auth check
-      const token = getCookieValue(request.headers.cookie, "webmux_token");
+      const token = getCookieValue(request.headers.cookie, "comux_token");
       if (!token || !verifyToken(token)) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();
@@ -164,7 +164,7 @@ async function main() {
   requestHandler = handlers.requestHandler;
 
   server.listen(currentPort, hostname, () => {
-    console.log(`> webmux ready on http://${hostname}:${currentPort}`);
+    console.log(`> comux ready on http://${hostname}:${currentPort}`);
 
     // Auto-restore sessions from DB after server is ready
     setTimeout(async () => {

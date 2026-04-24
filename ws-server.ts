@@ -20,7 +20,7 @@ function isValidSessionName(name: string): boolean {
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET =
-  process.env.WEBMUX_SECRET || "dev-secret-change-in-production";
+  process.env.COMUX_SECRET || "dev-secret-change-in-production";
 
 function verifyToken(token: string): boolean {
   try {
@@ -40,7 +40,7 @@ function getCookieValue(header: string | undefined, name: string): string | null
 // ─── Allowed origins ───────────────────────────────────────────────
 
 const ALLOWED_ORIGINS = new Set(
-  (process.env.ALLOWED_ORIGINS || "webmux.test,localhost")
+  (process.env.ALLOWED_ORIGINS || "comux.test,localhost")
     .split(",")
     .map((o) => o.trim().toLowerCase())
 );
@@ -72,7 +72,7 @@ export function setupWebSocket(server: HttpServer) {
       }
 
       // Auth check
-      const token = getCookieValue(request.headers.cookie, "webmux_token");
+      const token = getCookieValue(request.headers.cookie, "comux_token");
       if (!token || !verifyToken(token)) {
         socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
         socket.destroy();

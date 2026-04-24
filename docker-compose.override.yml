@@ -7,13 +7,13 @@ services:
       - "5432:5432"
 
   # Lightweight proxy: nginx-proxy → host dev server
-  # This lets webmux.test work while npm run dev runs on the host
+  # This lets comux.test work while npm run dev runs on the host
   dev-proxy:
     image: alpine/socat
     command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
     restart: unless-stopped
     environment:
-      VIRTUAL_HOST: webmux.test
+      VIRTUAL_HOST: comux.test
       VIRTUAL_PORT: "3000"
     extra_hosts:
       - "host.docker.internal:host-gateway"

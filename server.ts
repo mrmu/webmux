@@ -26,6 +26,6 @@ app.prepare().then(() => {
   setupWebSocket(server);
 
   server.listen(port, () => {
-    console.log(`> webmux ready on http://${hostname}:${port}`);
+    console.log(`> comux ready on http://${hostname}:${port}`);
   });
 });
