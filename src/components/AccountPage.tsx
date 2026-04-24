@@ -96,6 +96,7 @@ export default function AccountPage({
     <div className="screen">
       <header className="top-bar">
         <button className="icon-btn back-btn" onClick={onBack}>&larr;</button>
+        <img src="/logo-robot.png" alt="" className="top-logo" />
         <h1 className="top-title">Account</h1>
         <button className="logout-btn" onClick={logout}>Logout</button>
       </header>

@@ -89,6 +89,7 @@ function IssuesListPageContent() {
         >
           &#x2190;
         </button>
+        <img src="/logo-robot.png" alt="" className="top-logo" />
         <h1 className="top-title">Issues</h1>
         <button
           className="icon-btn"

@@ -235,6 +235,13 @@ select {
   flex-shrink: 0;
 }
 
+.top-logo {
+  width: 32px;
+  height: 32px;
+  display: block;
+  flex-shrink: 0;
+}
+
 .top-title { font-size: 1.3rem; font-weight: 700; flex: 1; }
 
 .icon-btn {
