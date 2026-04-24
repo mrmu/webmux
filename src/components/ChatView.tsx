@@ -158,6 +158,10 @@ export default function ChatView({
   // server-side 3s polling interval delays the switch by up to 3 seconds
   // and stale events from the old session can flash through.
   const [streamEpoch, setStreamEpoch] = useState(0);
+  // Current Claude Code status-line text, e.g. "Thinking... (5s)" — null when
+  // Claude isn't busy. Drives a small indicator at the bottom of the message
+  // list so the user knows the agent is working even before any reply lands.
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const userSelectingRef = useRef(false);
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
@@ -189,6 +193,28 @@ export default function ChatView({
     setInput(prefill.text);
     try { localStorage.setItem(draftKey, prefill.text); } catch { /* ignore */ }
   }, [prefill, draftKey]);
+
+  // Poll ui-state for Claude Code's own status-line text ("Thinking...",
+  // "Compacting...", etc.). Pauses when the tab isn't visible to save cycles.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled || document.visibilityState !== "visible") return;
+      try {
+        const s = await api.get(`/api/sessions/${sessionName}/ui-state`);
+        if (cancelled) return;
+        setAiStatus(typeof s?.status === "string" && s.status ? s.status : null);
+      } catch {
+        // On failure, leave previous state rather than flashing null.
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [sessionName]);
 
   // Clear and reload when switching projects (or mounting — this also covers
   // page refresh, where we always want to jump to the latest message).
@@ -490,6 +516,12 @@ export default function ChatView({
       {/* Chat Input — always visible */}
       {(
         <div className="chat-input-area">
+          {aiStatus && (
+            <div className="chat-ai-status" title="Live status from Claude Code">
+              <span className="chat-ai-status-dot" />
+              <span className="chat-ai-status-text">{aiStatus}</span>
+            </div>
+          )}
           {tmuxMismatch && (
             <div className="chat-mismatch-warn">
               <span>

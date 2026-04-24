@@ -482,6 +482,42 @@ select {
   font-size: 0.78rem; color: #fbbf24; padding: 0.3rem 0;
 }
 
+.chat-ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  margin-bottom: 0.35rem;
+  border-radius: 999px;
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.25);
+  font-size: 0.78rem;
+  color: #a5b4fc;
+  font-family: 'SF Mono', monospace;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.chat-ai-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a5b4fc;
+  animation: chat-ai-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.chat-ai-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes chat-ai-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
 .chat-input-row {
   display: flex;
   gap: 0.5rem;

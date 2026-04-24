@@ -120,29 +120,32 @@ export function extractInteractiveContent(
   return null;
 }
 
-const STATUS_SPINNERS = new Set(["·", "✻", "✽", "✶", "✳", "✢"]);
+// Claude Code animates the status spinner through several glyphs; include
+// whichever ones we've observed plus generic fallbacks. The full format of a
+// status line is roughly:
+//     {spinner} {Verbing}… ({time} · {tokens} · {extra info})
+// e.g. "✢ Deliberating… (2m 40s · ↓ 7.4k tokens · thought for 3s)"
+const STATUS_SPINNERS = new Set(["·", "✻", "✽", "✶", "✳", "✢", "*", "●", "○"]);
 
 export function parseStatusLine(paneText: string): string | null {
   if (!paneText) return null;
   const lines = paneText.split("\n");
 
-  let chromeIdx: number | null = null;
-  const searchStart = Math.max(0, lines.length - 10);
-  for (let i = searchStart; i < lines.length; i++) {
-    const stripped = lines[i].trim();
-    if (stripped.length >= 20 && [...stripped].every((c) => c === "─")) {
-      chromeIdx = i;
-      break;
-    }
-  }
-
-  if (chromeIdx === null) return null;
-
-  for (let i = chromeIdx - 1; i > Math.max(chromeIdx - 5, -1); i--) {
+  // Scan the tail of the pane (Claude's status sits a few lines above the
+  // prompt chrome but can be separated from it by Tip continuations or blank
+  // lines, so anchoring strictly to the chrome is fragile). Walk backwards
+  // looking for a line that matches the spinner signature.
+  const scanFrom = Math.max(0, lines.length - 25);
+  for (let i = lines.length - 1; i >= scanFrom; i--) {
     const line = lines[i].trim();
-    if (!line) continue;
-    if (STATUS_SPINNERS.has(line[0])) return line.slice(1).trim();
-    return null;
+    if (!line || line.length < 3) continue;
+    if (!STATUS_SPINNERS.has(line[0])) continue;
+    if (line[1] !== " ") continue;
+    const rest = line.slice(2).trim();
+    // Distinctive shape: contains an ellipsis (…) and usually a parenthetical
+    // timer. Anything that matches this is almost certainly the status line.
+    if (!/…/.test(rest)) continue;
+    return rest;
   }
   return null;
 }
