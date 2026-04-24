@@ -51,7 +51,10 @@ export default function LoginPage() {
     return (
       <div className="screen">
         <div className="login-container">
-          <h1 className="logo">comux</h1>
+          <div className="logo">
+            <img src="/logo-robot.png" alt="" className="logo-icon" />
+            <img src="/logo-text.png" alt="comux" className="logo-wordmark" />
+          </div>
           <div className="spinner" />
         </div>
       </div>
@@ -61,7 +64,10 @@ export default function LoginPage() {
   return (
     <div className="screen">
       <div className="login-container">
-        <h1 className="logo">comux</h1>
+        <div className="logo">
+            <img src="/logo-robot.png" alt="" className="logo-icon" />
+            <img src="/logo-text.png" alt="comux" className="logo-wordmark" />
+          </div>
         <p className="login-subtitle">
           {isFirstUser ? "Create admin account" : "Sign in to continue"}
         </p>

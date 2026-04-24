@@ -99,12 +99,22 @@ select {
 }
 
 .logo {
-  font-size: 2.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-icon {
+  width: 96px;
+  height: 96px;
+  display: block;
+}
+
+.logo-wordmark {
+  height: 32px;
+  width: auto;
+  display: block;
 }
 
 .login-subtitle { color: var(--text-dim); font-size: 0.95rem; }

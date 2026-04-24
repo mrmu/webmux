@@ -4,6 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "comux",
   description: "AI-Ops Development Platform",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

@@ -5,6 +5,29 @@ import { isValidCwd, isValidCommand } from "@/lib/validate";
 import { getProjectsRoot } from "@/lib/settings";
 import { syncComuxDir } from "@/lib/sync-comux-dir";
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ name: string }> }
+) {
+  if (!requireAuth(request))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { name } = await params;
+  const project = await prisma.project.findUnique({
+    where: { name },
+    select: { name: true, displayName: true, color: true, cwd: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+  return NextResponse.json({
+    name: project.name,
+    display_name: project.displayName,
+    color: project.color,
+    cwd: project.cwd,
+  });
+}
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ name: string }> }

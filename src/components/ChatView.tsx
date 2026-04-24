@@ -184,6 +184,21 @@ export default function ChatView({
     }
   }, [sessionName]);
 
+  // Refresh the picker periodically so newly-created JSONL files appear in
+  // the dropdown without needing the resolved session to change. The SSE
+  // stream only calls loadSessions() on sessionId flip, which doesn't fire
+  // when a pin is set and the pinned file still exists — so a fresh Claude
+  // session started in terminal would otherwise be invisible here until
+  // the user forced a reload.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadSessions();
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [loadSessions]);
+
   // Re-load draft when sessionName changes — covers the case where ChatView
   // isn't remounted across project switches (useState init only runs once).
   useEffect(() => {

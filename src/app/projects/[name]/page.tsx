@@ -40,12 +40,27 @@ function WorkspacePageContent({
   // Prefill payload for ChatView — nonce bumps so the same text can be sent
   // twice (e.g. re-Ask AI on the same note) and still trigger an update.
   const [chatPrefill, setChatPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  // Confirm the project exists before mounting Chat/Terminal. Without this,
+  // TerminalView's "empty windows → POST /api/sessions" retry would
+  // auto-create a stray Project row for any name typed into the URL
+  // (stale bookmarks, old cache, etc.).
+  const [projectReady, setProjectReady] = useState<boolean>(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
+      try {
+        await api.get(`/api/projects/${projectName}`);
+      } catch {
+        if (!cancelled) router.replace("/projects");
+        return;
+      }
+      if (cancelled) return;
+      setProjectReady(true);
       try { setSessions(await api.get("/api/sessions")); } catch { /* ignore */ }
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [projectName, router]);
 
   // Sync tab to URL
   const switchView = useCallback((view: string) => {
@@ -96,6 +111,8 @@ function WorkspacePageContent({
     closeAllPanels();
     switchView("chat");
   }, [closeAllPanels, switchView]);
+
+  if (!projectReady) return null;
 
   return (
     <div className="screen">
