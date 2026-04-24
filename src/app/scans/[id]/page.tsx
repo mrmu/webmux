@@ -160,6 +160,7 @@ export default function ScanDetailPage({
           <button className="icon-btn" onClick={() => router.back()}>
             &#x2190;
           </button>
+          <img src="/logo-robot.png" alt="" className="top-logo" />
           <h1 className="top-title">Loading…</h1>
         </header>
       </div>
@@ -173,6 +174,7 @@ export default function ScanDetailPage({
           <button className="icon-btn" onClick={() => router.back()}>
             &#x2190;
           </button>
+          <img src="/logo-robot.png" alt="" className="top-logo" />
           <h1 className="top-title">Not found</h1>
         </header>
       </div>
@@ -216,6 +218,7 @@ export default function ScanDetailPage({
         >
           &#x2190;
         </button>
+        <img src="/logo-robot.png" alt="" className="top-logo" />
         <h1 className="top-title">Scan #{scan.id}</h1>
       </header>
 

@@ -105,6 +105,7 @@ function ScansListPageContent() {
         <button className="icon-btn" title="Back" onClick={() => router.push("/projects")}>
           &#x2190;
         </button>
+        <img src="/logo-robot.png" alt="" className="top-logo" />
         <h1 className="top-title">Security Scans</h1>
         <button
           className="icon-btn"
