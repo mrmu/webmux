@@ -27,14 +27,19 @@ export async function POST(
     );
   }
 
-  // First non-empty line → title (trimmed at 80 chars so it fits an issue
-  // list without wrapping). Body keeps the FULL note content so nothing is
-  // lost when the note was a single long paragraph (title would otherwise
-  // eat the first 80 chars and the remainder would be discarded).
+  // Accept a caller-supplied title so the UI can show a short, editable
+  // summary derived from the note's first few sentences. Fall back to
+  // first-line-truncated if none was provided. Issue body defaults to
+  // empty — the note itself is the content and is surfaced in the issue
+  // page's Linked Notes section, so duplicating it here would be churn.
+  const reqBody = await request.json().catch(() => ({}));
+  const customTitle = typeof reqBody?.title === "string" ? reqBody.title.trim() : "";
+  const customBody = typeof reqBody?.body === "string" ? reqBody.body : "";
+
   const lines = note.content.split("\n");
   const firstLine = lines.find((l) => l.trim()) || "(no title)";
-  const title = firstLine.trim().slice(0, 80);
-  const body = note.content;
+  const title = (customTitle || firstLine.trim()).slice(0, 200);
+  const body = customBody;
 
   const issue = await prisma.issue.create({
     data: {

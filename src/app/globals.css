@@ -1041,6 +1041,52 @@ select {
 .issue-picker-create:hover { background: rgba(99,102,241,0.22); }
 .issue-picker-create:disabled { opacity: 0.5; cursor: wait; }
 
+.issue-picker-create-form {
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.issue-picker-create-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 0 0.65rem;
+}
+
+.issue-picker-create-actions {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  padding: 0.4rem 0.65rem 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  margin-top: 0.3rem;
+}
+
+.issue-picker-btn {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid transparent;
+}
+.issue-picker-btn.secondary {
+  background: transparent;
+  border-color: rgba(255,255,255,0.12);
+  color: var(--text-muted);
+}
+.issue-picker-btn.secondary:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+.issue-picker-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.issue-picker-btn.primary:hover { background: var(--accent-hover); }
+.issue-picker-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Note card top row must be a stacking-position container so the picker
    can position absolutely relative to the card. */
 .note-card { position: relative; }

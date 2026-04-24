@@ -237,6 +237,7 @@ export default function NotesPanel({
                         <IssuePicker
                           projectName={sessionName}
                           noteId={n.id}
+                          noteContent={n.content}
                           onLinked={loadNotes}
                           onClose={() => setPickerNoteId(null)}
                         />
