@@ -9,8 +9,17 @@ interface Note {
   status: "OPEN" | "IN_PROGRESS" | "AWAITING" | "DONE";
   issue_id: number | null;
   pr_url: string;
+  exchange_count: number;
   created_at: number;
   updated_at: number;
+}
+
+interface NoteExchange {
+  id: number;
+  session_id: string;
+  asked_at: number;
+  prompt: string;
+  reply: string;
 }
 
 type StatusFilter = "ALL" | "ACTIVE" | Note["status"];
@@ -55,6 +64,9 @@ export default function NotesPanel({
   const [editDraft, setEditDraft] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("ACTIVE");
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [exchangesById, setExchangesById] = useState<Record<number, NoteExchange[]>>({});
+  const [loadingExchanges, setLoadingExchanges] = useState<number | null>(null);
   const editRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -131,6 +143,26 @@ export default function NotesPanel({
     } catch { /* ignore */ }
   };
 
+  const toggleExchanges = async (id: number) => {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (exchangesById[id]) return; // already loaded
+    setLoadingExchanges(id);
+    try {
+      const data = await api.get(`/api/notes/${id}/exchanges`);
+      setExchangesById((prev) => ({ ...prev, [id]: data }));
+    } catch {
+      setExchangesById((prev) => ({ ...prev, [id]: [] }));
+    }
+    setLoadingExchanges(null);
+    // Refresh notes list so exchange_count reflects the latest count
+    // (extraction fires inside the GET exchanges route).
+    loadNotes();
+  };
+
   const promoteToIssue = async (n: Note) => {
     if (n.issue_id) return;
     try {
@@ -200,6 +232,16 @@ export default function NotesPanel({
                     <a className="note-pr-link" href={n.pr_url} target="_blank" rel="noreferrer">
                       PR
                     </a>
+                  )}
+                  {n.exchange_count > 0 && (
+                    <button
+                      className="note-exchange-chip"
+                      onClick={() => toggleExchanges(n.id)}
+                      title="Show AI replies captured from the chat session"
+                    >
+                      {n.exchange_count} {n.exchange_count === 1 ? "reply" : "replies"}
+                      {expandedId === n.id ? " ▾" : " ▸"}
+                    </button>
                   )}
                   <span style={{ flex: 1 }} />
                   <button
@@ -273,6 +315,26 @@ export default function NotesPanel({
                     </>
                   )}
                 </div>
+                {expandedId === n.id && (
+                  <div className="note-exchanges">
+                    {loadingExchanges === n.id && !exchangesById[n.id] ? (
+                      <p className="settings-hint" style={{ margin: 0 }}>Loading...</p>
+                    ) : !exchangesById[n.id] || exchangesById[n.id].length === 0 ? (
+                      <p className="settings-hint" style={{ margin: 0 }}>
+                        No exchanges captured yet.
+                      </p>
+                    ) : (
+                      exchangesById[n.id].map((ex) => (
+                        <div key={ex.id} className="note-exchange">
+                          <div className="note-exchange-meta">
+                            {formatTime(ex.asked_at)} · session {ex.session_id.slice(0, 8)}
+                          </div>
+                          <div className="note-exchange-reply">{ex.reply}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             );
           })

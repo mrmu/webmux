@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getProjectCwd } from "@/lib/project-cwd";
 import { parseJsonlMessages } from "@/lib/jsonl-parser";
 import { resolveChatSession } from "@/lib/chat-session-resolver";
+import { extractNoteExchanges } from "@/lib/extract-note-exchanges";
 import fs from "fs";
 
 /**
@@ -52,6 +53,10 @@ export async function GET(
         } catch {
           /* ignore */
         }
+        // Opportunistic: each SSE tick also scans the JSONL for note-tagged
+        // exchanges and persists new ones. Keeps NoteExchange rows close to
+        // real-time so a later /clear or rm can't erase the record.
+        extractNoteExchanges(cwd!).catch(() => { /* non-fatal */ });
       }
 
       function watchFile(path: string) {

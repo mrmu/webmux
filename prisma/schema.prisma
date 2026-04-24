@@ -77,9 +77,30 @@ model Note {
   updatedAt   DateTime @updatedAt @map("updated_at")
   project     Project  @relation(fields: [sessionName], references: [name], onDelete: Cascade)
   issue       Issue?   @relation(fields: [issueId], references: [id], onDelete: SetNull)
+  exchanges   NoteExchange[]
 
   @@index([issueId])
   @@map("notes")
+}
+
+// Q&A pair captured from Claude Code JSONL. Keyed by the user-message uuid so
+// re-parsing the same JSONL is idempotent. Stored as plain text (tool/thinking
+// blocks stripped) so the note keeps a reliable record even if the underlying
+// JSONL is later /clear'd or deleted.
+model NoteExchange {
+  id          Int      @id @default(autoincrement())
+  noteId      Int      @map("note_id")
+  sessionId   String   @map("session_id")    // Claude Code session uuid
+  promptUuid  String   @unique @map("prompt_uuid") // JSONL user-message uuid
+  askedAt     DateTime @map("asked_at")       // pulled from JSONL entry timestamp
+  prompt      String   @db.Text
+  reply       String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  note        Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId])
+  @@map("note_exchanges")
 }
 
 // Issue tracker — cross-project, audit-friendly (soft delete + event log).

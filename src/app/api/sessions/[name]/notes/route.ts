@@ -10,6 +10,7 @@ type NoteRow = {
   prUrl: string;
   createdAt: Date;
   updatedAt: Date;
+  _count?: { exchanges: number };
 };
 
 function serialize(n: NoteRow) {
@@ -19,6 +20,7 @@ function serialize(n: NoteRow) {
     status: n.status,
     issue_id: n.issueId,
     pr_url: n.prUrl,
+    exchange_count: n._count?.exchanges ?? 0,
     created_at: Math.floor(n.createdAt.getTime() / 1000),
     updated_at: Math.floor(n.updatedAt.getTime() / 1000),
   };
@@ -37,6 +39,7 @@ export async function GET(
   const notes = await prisma.note.findMany({
     where: { sessionName: name },
     orderBy: { createdAt: "desc" },
+    include: { _count: { select: { exchanges: true } } },
   });
   return NextResponse.json(notes.map(serialize));
 }
