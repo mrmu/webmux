@@ -27,10 +27,12 @@ export default function ProjectSettings({
   projectName,
   onClose,
   onDeleted,
+  onAskAI,
 }: {
   projectName: string;
   onClose: () => void;
   onDeleted: () => void;
+  onAskAI?: (text: string) => void;
 }) {
   // Project info
   const [displayName, setDisplayName] = useState("");
@@ -244,6 +246,64 @@ export default function ProjectSettings({
     onDeleted();
   };
 
+  /** Build a structured analysis prompt for the Chat tab. Includes the
+   *  current webmux settings so the AI knows what's already in place and
+   *  can point out conflicts vs. what's written in CLAUDE.md / docs. */
+  const buildAnalysisPrompt = (): string => {
+    const hostsList = hosts.length
+      ? hosts
+          .map(
+            (h) =>
+              `  - ${h.env}: ${h.name} → ${h.ssh_target}${h.description ? ` (${h.description})` : ""}`
+          )
+          .join("\n")
+      : "  (無)";
+    return [
+      "請幫我盤點這個專案的既有文件，建議如何把內容整理到 webmux 的專案設定。",
+      "",
+      "## 請讀取並分析",
+      "- `CLAUDE.md`、`AGENTS.md`（若存在）",
+      "- `docs/` 下與部署 / 測試 / 運維相關的 markdown",
+      "- `README.md` 的部署段落",
+      "- `scripts/` 下的部署腳本",
+      "",
+      "## webmux 目前的設定",
+      "",
+      "### Deploy steps（會寫入 `.webmux/deploy.md`）",
+      deployDoc ? "```\n" + deployDoc + "\n```" : "(空)",
+      "",
+      "### Test checklist（會寫入 `.webmux/test.md`）",
+      testDoc ? "```\n" + testDoc + "\n```" : "(空)",
+      "",
+      "### Hosts（會寫入 `.webmux/hosts.md`）",
+      hostsList,
+      "",
+      "## 請以下列結構回覆",
+      "",
+      "### 建議的 Deploy steps",
+      "若有更新，列出完整新內容；若現有已充分，寫「現有設定已充分」。",
+      "",
+      "### 建議的 Test checklist",
+      "同上格式。",
+      "",
+      "### 建議的 Hosts 調整",
+      "逐條列出新增 / 修改 / 刪除的 host，並引用來源檔的相關片段說明原因。",
+      "",
+      "### 衝突與需人工判斷的地方",
+      "列出 CLAUDE.md / docs 與 webmux 目前設定不一致、或需要人決定的項目。",
+      "",
+      "**請不要直接修改 `.webmux/*` 檔或 CLAUDE.md**——我會看完回覆後到 webmux 設定面板手動貼上調整。",
+      "",
+      "(tracking: project-settings analysis)",
+    ].join("\n");
+  };
+
+  const askAIForSuggestions = () => {
+    if (!onAskAI) return;
+    onAskAI(buildAnalysisPrompt());
+    onClose();
+  };
+
   return (
     <div className="settings-panel">
       <div className="settings-header">
@@ -425,7 +485,6 @@ export default function ProjectSettings({
             <button
               onClick={syncWebmux}
               disabled={syncBusy}
-              className="settings-hint"
               style={{
                 marginLeft: "0.75rem",
                 fontSize: "0.8rem",
@@ -433,6 +492,7 @@ export default function ProjectSettings({
                 border: "1px solid rgba(255,255,255,0.15)",
                 borderRadius: 4,
                 background: "transparent",
+                color: "var(--text-muted)",
                 cursor: "pointer",
               }}
               title="依 DB 內容重新生成 .webmux/ 下所有檔案"
@@ -445,6 +505,24 @@ export default function ProjectSettings({
             DB 才是真實來源，檔案每次儲存會重新生成。按「同步 .webmux/」只是手動重跑一次，
             不會改動任何 DB 內容；用在現有檔案被刪或想確認重生。
           </p>
+          {onAskAI && (
+            <div className="settings-analyze-box">
+              <button
+                onClick={askAIForSuggestions}
+                type="button"
+                className="btn-secondary"
+                style={{ padding: "0.4rem 0.9rem", fontSize: "0.85rem" }}
+              >
+                請 AI 分析既有文件並建議整合
+              </button>
+              <p className="settings-hint" style={{ margin: "0.3rem 0 0" }}>
+                會用一段結構化 prompt 把目前的 Deploy steps / Test checklist / Hosts
+                發給 Chat tab 的 AI，請它讀 <code>CLAUDE.md</code>、<code>docs/</code>、
+                <code>scripts/</code> 等檔，針對每個欄位給建議。<strong>AI 不會動任何
+                設定</strong>，回覆是純文字——你看完再手動貼到下面欄位。
+              </p>
+            </div>
+          )}
           <div className="form-row">
             <label>部署步驟</label>
             <textarea
@@ -496,6 +574,7 @@ export default function ProjectSettings({
                   border: "1px solid rgba(255,255,255,0.15)",
                   borderRadius: 4,
                   background: "transparent",
+                  color: "var(--text-muted)",
                   cursor: "pointer",
                 }}
                 title="對每個還沒有 pointer 的檔案一次加入"
@@ -552,7 +631,7 @@ export default function ProjectSettings({
                     disabled={pointerBusyFor !== null}
                     style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
                   >
-                    {pointerBusyFor === p.filename ? "加入中..." : "加入 pointer"}
+                    {pointerBusyFor === p.filename ? "加入中..." : "加入指向"}
                   </button>
                 )}
               </div>
