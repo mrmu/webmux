@@ -73,6 +73,10 @@ export default function ProjectSettings({
   const [pointerBlock, setPointerBlock] = useState("");
   const [showPointerPreview, setShowPointerPreview] = useState(false);
   const [pointerBusyFor, setPointerBusyFor] = useState<string | null>(null);
+  // Per-target error surfaced from the agent-pointers POST response when the
+  // server couldn't write the file (EACCES, etc). Keyed by filename; cleared
+  // before each attempt.
+  const [pointerErrors, setPointerErrors] = useState<Record<string, string>>({});
 
   const loadProject = useCallback(async () => {
     try {
@@ -214,15 +218,39 @@ export default function ProjectSettings({
     loadChatSessions();
   };
 
+  /** The API returns 200 with per-file `{ ok, error }` entries, so HTTP
+   *  success doesn't mean all writes succeeded — walk the results array
+   *  and stash any per-filename errors for the UI to display. */
+  const applyPointerResults = (
+    results: { filename: string; ok: boolean; error?: string }[]
+  ) => {
+    const errs: Record<string, string> = {};
+    for (const r of results) {
+      if (!r.ok) errs[r.filename] = humanizePointerError(r.error || "unknown error");
+    }
+    setPointerErrors(errs);
+  };
+
   const addPointer = async (filename: string) => {
     setPointerBusyFor(filename);
+    setPointerErrors((prev) => {
+      const next = { ...prev };
+      delete next[filename];
+      return next;
+    });
     try {
-      await api.post(`/api/sessions/${projectName}/agent-pointers`, {
+      const res = await api.post(`/api/sessions/${projectName}/agent-pointers`, {
         targets: [filename],
       });
+      if (Array.isArray(res?.results)) applyPointerResults(res.results);
       await loadAgentPointers();
       if (filename === "CLAUDE.md") await loadClaudeMd();
-    } catch { /* ignore */ }
+    } catch (e) {
+      setPointerErrors((prev) => ({
+        ...prev,
+        [filename]: humanizePointerError(e instanceof Error ? e.message : String(e)),
+      }));
+    }
     setPointerBusyFor(null);
   };
 
@@ -230,15 +258,36 @@ export default function ProjectSettings({
     const missing = agentPointers.filter((p) => !p.hasPointer).map((p) => p.filename);
     if (missing.length === 0) return;
     setPointerBusyFor("*");
+    setPointerErrors({});
     try {
-      await api.post(`/api/sessions/${projectName}/agent-pointers`, {
+      const res = await api.post(`/api/sessions/${projectName}/agent-pointers`, {
         targets: missing,
       });
+      if (Array.isArray(res?.results)) applyPointerResults(res.results);
       await loadAgentPointers();
       await loadClaudeMd();
-    } catch { /* ignore */ }
+    } catch (e) {
+      const msg = humanizePointerError(e instanceof Error ? e.message : String(e));
+      const errs: Record<string, string> = {};
+      for (const f of missing) errs[f] = msg;
+      setPointerErrors(errs);
+    }
     setPointerBusyFor(null);
   };
+
+  function humanizePointerError(raw: string): string {
+    // Node fs errors are verbose; tease out the common ones into something
+    // a non-engineer user can act on.
+    if (/EACCES/i.test(raw)) {
+      const m = raw.match(/open\s+'([^']+)'/);
+      return `權限被拒：webmux 無法寫入 ${m ? m[1] : "此檔"}。請在主機上 ${
+        m ? `\`chown devops ${m[1]}\`` : "修改檔案擁有者"
+      } 後重試。`;
+    }
+    if (/ENOENT/i.test(raw)) return `找不到檔案或目錄：${raw}`;
+    if (/EROFS/i.test(raw)) return "檔案系統唯讀，無法寫入。";
+    return raw;
+  }
 
   const deleteProject = async () => {
     if (!confirm(`確定刪除專案「${displayName || projectName}」？會移除 DB 紀錄並結束 tmux session。`)) return;
@@ -622,29 +671,32 @@ export default function ProjectSettings({
           </div>
           <div className="agent-pointer-list">
             {agentPointers.map((p) => (
-              <div
-                key={p.filename}
-                className={`claudemd-status ${p.hasPointer ? "ok" : "warn"}`}
-                style={{ marginBottom: "0.4rem" }}
-              >
-                <span className="claudemd-icon">{p.hasPointer ? "✅" : "⚠"}</span>
-                <span style={{ flex: 1 }}>
-                  <code>{p.filename}</code>{" "}
-                  <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
-                    ({p.agent})
-                    {!p.exists && " — 會新建此檔"}
-                    {p.hasPointer && " — 已有 pointer"}
+              <div key={p.filename} style={{ marginBottom: "0.4rem" }}>
+                <div
+                  className={`claudemd-status ${p.hasPointer ? "ok" : "warn"}`}
+                >
+                  <span className="claudemd-icon">{p.hasPointer ? "✅" : "⚠"}</span>
+                  <span style={{ flex: 1 }}>
+                    <code>{p.filename}</code>{" "}
+                    <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
+                      ({p.agent})
+                      {!p.exists && " — 會新建此檔"}
+                      {p.hasPointer && " — 已有 pointer"}
+                    </span>
                   </span>
-                </span>
-                {!p.hasPointer && (
-                  <button
-                    className="btn-primary"
-                    onClick={() => addPointer(p.filename)}
-                    disabled={pointerBusyFor !== null}
-                    style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
-                  >
-                    {pointerBusyFor === p.filename ? "加入中..." : "加入指向"}
-                  </button>
+                  {!p.hasPointer && (
+                    <button
+                      className="btn-primary"
+                      onClick={() => addPointer(p.filename)}
+                      disabled={pointerBusyFor !== null}
+                      style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
+                    >
+                      {pointerBusyFor === p.filename ? "加入中..." : "加入指向"}
+                    </button>
+                  )}
+                </div>
+                {pointerErrors[p.filename] && (
+                  <p className="pointer-error">{pointerErrors[p.filename]}</p>
                 )}
               </div>
             ))}

@@ -1616,6 +1616,23 @@ select {
   color: var(--accent);
 }
 
+.pointer-error {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.6rem;
+  background: rgba(239,68,68,0.1);
+  border-left: 3px solid var(--danger);
+  border-radius: 3px;
+  font-size: 0.78rem;
+  color: #fca5a5;
+  line-height: 1.5;
+}
+.pointer-error code {
+  background: rgba(255,255,255,0.08);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.82em;
+}
+
 .settings-analyze-box {
   margin: 0.6rem 0;
   padding: 0.6rem 0.75rem;
