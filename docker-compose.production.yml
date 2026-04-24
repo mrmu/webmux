@@ -2,7 +2,7 @@
 # Usage: docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 #
 # 架構：
-#   - webmux (Next.js + WS) 直接跑在宿主機 (systemd) — port 3000
+#   - comux (Next.js + WS) 直接跑在宿主機 (systemd) — port 3000
 #   - 本檔案只負責 DB + 一個薄的 socat proxy，讓 nginx-proxy / acme-companion
 #     能掃到 VIRTUAL_HOST / LETSENCRYPT_HOST 並自動簽憑證
 #   - host.docker.internal 需要 extra_hosts (Linux 沒有內建)
@@ -33,7 +33,7 @@ services:
   #   VIRTUAL_HOST="a.com,b.com" docker compose ... up -d --force-recreate prod-proxy
   prod-proxy:
     image: alpine/socat
-    container_name: webmux-proxy
+    container_name: comux-proxy
     command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
     restart: unless-stopped
     environment:

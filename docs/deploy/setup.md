@@ -1,4 +1,4 @@
-# WebMux 部署指南
+# comux 部署指南
 
 ## 架構
 
@@ -7,17 +7,17 @@ Linux Host (VPS)
 ├── dev user (e.g. devops)
 │   ├── tmux server          ← session 持久化
 │   ├── Claude Code CLI      ← Max Plan 登入
-│   ├── Node.js + webmux     ← systemd 管理，佔 port 3000
+│   ├── Node.js + comux      ← systemd 管理，佔 port 3000
 │   └── ~/.claude/           ← 認證 + 設定
 │
 └── Docker
     ├── PostgreSQL           ← 專案 metadata + 用戶帳號
-    └── webmux-proxy         ← socat: wp-proxy network → host:3000
+    └── comux-proxy          ← socat: wp-proxy network → host:3000
                                (讓 nginx-proxy + acme-companion 看到
                                 VIRTUAL_HOST / LETSENCRYPT_HOST 自動簽憑證)
 ```
 
-webmux 本身**不跑在容器裡** — 直接在宿主機用 `systemd` 管理。
+comux 本身**不跑在容器裡** — 直接在宿主機用 `systemd` 管理。
 容器版本的舊部署因為要假冒 host user (UID/GID mount + pid:host + home mount)
 太脆弱，Claude Code 或路徑變動容易整個壞掉，所以全砍。
 
@@ -43,7 +43,7 @@ id devops   # 記下 uid/gid
 ```bash
 su - devops
 
-# Node.js 22 (webmux + Claude Code 共用)
+# Node.js 22 (comux + Claude Code 共用)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
 
@@ -64,12 +64,12 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
 ```
 
-## 4. 拉 webmux + build
+## 4. 拉 comux + build
 
 ```bash
 cd ~
 git clone git@github.com:mrmu/comux.git
-cd webmux
+cd comux
 
 # 先產生兩個 secret，再寫進 .env (DATABASE_URL 和 POSTGRES_PASSWORD 必須同一個密碼)
 DB_PASS=$(openssl rand -hex 16)
@@ -77,21 +77,21 @@ JWT=$(openssl rand -hex 32)
 
 cat > .env << EOF
 # Database (localhost 因為 Node 跑在 host，DB 容器 port 5432 mapped to host)
-DATABASE_URL=postgresql://webmux:${DB_PASS}@localhost:5432/webmux?schema=public
+DATABASE_URL=postgresql://comux:${DB_PASS}@localhost:5432/comux?schema=public
 POSTGRES_PASSWORD=${DB_PASS}
 
 # Auth JWT
-WEBMUX_SECRET=${JWT}
+COMUX_SECRET=${JWT}
 
 # 專案根目錄
 PROJECTS_ROOT=/home/devops/projects
 
 # Domain / SSL
-VIRTUAL_HOST=webmux.yoursite.com
+VIRTUAL_HOST=comux.yoursite.com
 LETSENCRYPT_EMAIL=you@example.com
 
 # WS origin allowlist
-ALLOWED_ORIGINS=webmux.yoursite.com,localhost
+ALLOWED_ORIGINS=comux.yoursite.com,localhost
 
 # Cloudflare (選用，DNS 管理功能才需要)
 CF_API_TOKEN=
@@ -110,32 +110,35 @@ npm run build
 docker network create wp-proxy 2>/dev/null || true
 
 # 起 DB + prod-proxy (socat)
+# 注意 .env 裡含逗號的值（例如 ALLOWED_ORIGINS）要先手動 export，
+# 否則 docker compose v5 會在第一個逗號截斷，導致 nginx-proxy 註冊錯 hostname。
+set -a; . ./.env; set +a
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 
 # 確認
-docker ps | grep -E 'webmux|postgres'
+docker ps | grep -E 'comux|postgres'
 ```
 
 ## 6. Push DB schema
 
 ```bash
-cd ~/webmux
+cd ~/comux
 npm run db:push
 ```
 
-## 7. systemd 管理 webmux
+## 7. systemd 管理 comux
 
 ```bash
 # 複製 unit file (視情況調整 User/WorkingDirectory 路徑)
-sudo cp docs/deploy/webmux.service /etc/systemd/system/webmux.service
-sudo nano /etc/systemd/system/webmux.service   # 確認 User=, WorkingDirectory=, EnvironmentFile= 路徑對
+sudo cp docs/deploy/comux.service /etc/systemd/system/comux.service
+sudo nano /etc/systemd/system/comux.service   # 確認 User=, WorkingDirectory=, EnvironmentFile= 路徑對
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now webmux
+sudo systemctl enable --now comux
 
 # 檢查
-sudo systemctl status webmux
-sudo journalctl -u webmux -f
+sudo systemctl status comux
+sudo journalctl -u comux -f
 ```
 
 ## 8. 驗證
@@ -145,24 +148,24 @@ sudo journalctl -u webmux -f
 curl -s http://localhost:3000/api/auth/check
 
 # 容器 proxy 也通
-docker exec webmux-proxy nc -zv host.docker.internal 3000
+docker exec comux-proxy nc -zv host.docker.internal 3000
 
 # nginx-proxy 有簽憑證後
-curl -I https://webmux.yoursite.com
+curl -I https://comux.yoursite.com
 ```
 
-瀏覽器開 `https://webmux.yoursite.com`，建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
+瀏覽器開 `https://comux.yoursite.com`，建 admin 帳號 → 專案 → Terminal 輸入 `claude`。
 
 ---
 
-## 更新 webmux
+## 更新 comux
 
 ```bash
-cd ~/webmux
+cd ~/comux
 git pull
 npm ci
 npm run build
-sudo systemctl restart webmux
+sudo systemctl restart comux
 # tmux session 不受影響（獨立 daemon）
 ```
 
@@ -170,13 +173,13 @@ sudo systemctl restart webmux
 
 ```bash
 # Node log
-sudo journalctl -u webmux -f
+sudo journalctl -u comux -f
 
 # 代理容器 log
-docker logs webmux-proxy -f
+docker logs comux-proxy -f
 
 # DB 直接連
-docker exec -it $(docker compose ps -q db) psql -U webmux
+docker exec -it $(docker compose ps -q db) psql -U comux
 
 # tmux (直接在 host，不透過容器)
 tmux list-sessions
@@ -190,18 +193,18 @@ tmux attach -t <project-name>
 本機流程未變：
 
 ```bash
-cd ~/next/webmux
+cd ~/next/comux
 brew install tmux
 npm install -g @anthropic-ai/claude-code
 
 docker compose up -d db dev-proxy
 npm run dev
 
-# http://webmux.test
+# http://comux.test
 ```
 
 `npm run dev` 跑兩個進程（Next.js port 3000 + WS port 3001），`dev-proxy` 容器把
-`webmux.test` 流量從 nginx-proxy 轉到宿主機 port 3000 
+`comux.test` 流量從 nginx-proxy 轉到宿主機 port 3000
 
 ## 個人專案正式機
 

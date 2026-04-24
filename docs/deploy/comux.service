@@ -1,5 +1,5 @@
 [Unit]
-Description=webmux — Next.js + tmux WebSocket terminal
+Description=comux — Next.js + tmux WebSocket terminal
 Documentation=https://github.com/mrmu/comux
 After=network-online.target docker.service
 Wants=network-online.target
@@ -9,10 +9,10 @@ Type=simple
 # 改成實際的 dev user (跟跑 tmux / claude 的是同一個)
 User=devops
 Group=devops
-WorkingDirectory=/home/devops/webmux
+WorkingDirectory=/home/devops/comux
 
-# 從 .env 讀 DATABASE_URL / WEBMUX_SECRET / VIRTUAL_HOST / PROJECTS_ROOT / ...
-EnvironmentFile=/home/devops/webmux/.env
+# 從 .env 讀 DATABASE_URL / COMUX_SECRET / VIRTUAL_HOST / PROJECTS_ROOT / ...
+EnvironmentFile=/home/devops/comux/.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
@@ -30,7 +30,7 @@ TimeoutStopSec=10
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=webmux
+SyslogIdentifier=comux
 
 [Install]
 WantedBy=multi-user.target

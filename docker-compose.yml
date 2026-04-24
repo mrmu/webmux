@@ -1,15 +1,24 @@
+# Pin the compose project name to "webmux" so the pgdata volume and
+# default-named containers keep their historical identity. The product
+# has been renamed to comux at every user-visible layer (URL, DB content,
+# systemd unit, prod-proxy container) but the Docker volume name is a
+# storage-level artifact — renaming it in place would require copying
+# several GB of Postgres data with downtime. Leave this pin in place
+# until a separate maintenance window migrates the volume.
+name: webmux
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: webmux
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-webmux}
-      POSTGRES_DB: webmux
+      POSTGRES_USER: comux
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-comux}
+      POSTGRES_DB: comux
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U webmux"]
+      test: ["CMD-SHELL", "pg_isready -U comux"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -20,17 +29,17 @@ services:
       target: builder
     command: sh -c "npx prisma db push"
     environment:
-      DATABASE_URL: postgresql://webmux:${POSTGRES_PASSWORD:-webmux}@db:5432/webmux?schema=public
+      DATABASE_URL: postgresql://comux:${POSTGRES_PASSWORD:-comux}@db:5432/comux?schema=public
     depends_on:
       db:
         condition: service_healthy
 
   app:
     build: .
-    container_name: webmux
+    container_name: comux
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://webmux:${POSTGRES_PASSWORD:-webmux}@db:5432/webmux?schema=public
+      DATABASE_URL: postgresql://comux:${POSTGRES_PASSWORD:-comux}@db:5432/comux?schema=public
       COMUX_PASSWORD: ${COMUX_PASSWORD:-}
       COMUX_SECRET: ${COMUX_SECRET:-}
       HOST_HOME: ${HOST_HOME:-/home/devops_bot}
