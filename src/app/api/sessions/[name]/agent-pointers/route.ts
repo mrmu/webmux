@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getProjectCwd } from "@/lib/project-cwd";
 import {
   AGENT_POINTER_TARGETS,
+  WEBMUX_POINTER_BLOCK,
   ensurePointer,
   readPointerStatus,
 } from "@/lib/sync-webmux-dir";
@@ -28,7 +29,9 @@ export async function GET(
     ...t,
     ...readPointerStatus(cwd, t.filename),
   }));
-  return NextResponse.json({ targets });
+  // Include the pointer block itself so the UI can preview exactly what gets
+  // appended when the user clicks "Add pointer" — no guessing, no drift.
+  return NextResponse.json({ targets, pointer_block: WEBMUX_POINTER_BLOCK });
 }
 
 /** Add the pointer block to each target listed in `body.targets`.

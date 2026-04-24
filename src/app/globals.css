@@ -1529,6 +1529,48 @@ select {
   cursor: pointer; font-size: 1rem; padding: 0 0.3rem;
 }
 .host-delete:hover { color: var(--danger); }
+.host-clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.host-clickable:hover { color: var(--accent); }
+
+.host-item-edit {
+  background: var(--bg-card);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.host-edit-row {
+  display: flex;
+  gap: 0.4rem;
+}
+.host-item-edit input,
+.host-item-edit select {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--bg-input);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 0.82rem;
+  outline: none;
+  font-family: inherit;
+}
+.host-item-edit input { flex: 1; min-width: 0; }
+.host-item-edit select { flex: 0 0 130px; }
+.host-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.host-add-section {
+  margin-top: 0.5rem;
+}
+
 .host-add {
   display: flex; gap: 0.4rem; flex-wrap: wrap;
 }
@@ -1536,6 +1578,39 @@ select {
   flex: 1; min-width: 120px; padding: 0.45rem 0.6rem;
   border: 1px solid var(--bg-input); border-radius: var(--radius-sm);
   background: var(--bg-input); color: var(--text); font-size: 0.82rem; outline: none;
+}
+
+.host-quick-local {
+  margin-top: 0.4rem;
+  background: none;
+  border: 1px dashed rgba(255,255,255,0.15);
+  color: var(--text-muted);
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+}
+.host-quick-local:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pointer-preview {
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--text-muted);
+  font-family: 'SF Mono', monospace;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 /* Chat session selector */

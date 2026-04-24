@@ -45,7 +45,10 @@ export default function ProjectSettings({
 
   // Hosts
   const [hosts, setHosts] = useState<Host[]>([]);
-  const [newHost, setNewHost] = useState({ name: "", ssh_target: "", env: "production" });
+  const [newHost, setNewHost] = useState({ name: "", ssh_target: "", env: "production", description: "" });
+  const [editingHostId, setEditingHostId] = useState<number | null>(null);
+  const [hostDraft, setHostDraft] = useState<Host | null>(null);
+  const [hostBusy, setHostBusy] = useState(false);
 
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
@@ -65,6 +68,8 @@ export default function ProjectSettings({
     exists: boolean;
     hasPointer: boolean;
   }[]>([]);
+  const [pointerBlock, setPointerBlock] = useState("");
+  const [showPointerPreview, setShowPointerPreview] = useState(false);
   const [pointerBusyFor, setPointerBusyFor] = useState<string | null>(null);
 
   const loadProject = useCallback(async () => {
@@ -113,6 +118,7 @@ export default function ProjectSettings({
     try {
       const data = await api.get(`/api/sessions/${projectName}/agent-pointers`);
       setAgentPointers(data.targets || []);
+      if (typeof data.pointer_block === "string") setPointerBlock(data.pointer_block);
     } catch { setAgentPointers([]); }
   }, [projectName]);
 
@@ -155,14 +161,50 @@ export default function ProjectSettings({
     if (!newHost.name || !newHost.ssh_target) return;
     try {
       await api.post(`/api/sessions/${projectName}/hosts`, newHost);
-      setNewHost({ name: "", ssh_target: "", env: "production" });
+      setNewHost({ name: "", ssh_target: "", env: "production", description: "" });
       loadHosts();
     } catch { /* ignore */ }
   };
 
+  const fillLocalhost = () => {
+    setNewHost({
+      name: "本機",
+      ssh_target: "localhost",
+      env: "production",
+      description: "專案就跑在這台 webmux 主機上，部署指令直接執行、不用 SSH",
+    });
+  };
+
   const deleteHost = async (id: number) => {
+    if (!confirm("確定刪除這個主機設定嗎？")) return;
     await api.del(`/api/sessions/${projectName}/hosts/${id}`);
     loadHosts();
+  };
+
+  const startEditHost = (h: Host) => {
+    setEditingHostId(h.id);
+    setHostDraft({ ...h });
+  };
+
+  const cancelEditHost = () => {
+    setEditingHostId(null);
+    setHostDraft(null);
+  };
+
+  const saveHost = async () => {
+    if (!hostDraft) return;
+    setHostBusy(true);
+    try {
+      await api.put(`/api/sessions/${projectName}/hosts/${hostDraft.id}`, {
+        name: hostDraft.name,
+        ssh_target: hostDraft.ssh_target,
+        env: hostDraft.env,
+        description: hostDraft.description,
+      });
+      await loadHosts();
+      cancelEditHost();
+    } catch { /* ignore */ }
+    setHostBusy(false);
   };
 
   const selectChatSession = async (sessionId: string) => {
@@ -197,7 +239,7 @@ export default function ProjectSettings({
   };
 
   const deleteProject = async () => {
-    if (!confirm(`Delete project "${displayName || projectName}"? This removes the DB record and kills the tmux session.`)) return;
+    if (!confirm(`確定刪除專案「${displayName || projectName}」？會移除 DB 紀錄並結束 tmux session。`)) return;
     await api.del(`/api/sessions/${projectName}`);
     onDeleted();
   };
@@ -205,24 +247,24 @@ export default function ProjectSettings({
   return (
     <div className="settings-panel">
       <div className="settings-header">
-        <h2>Project Settings</h2>
+        <h2>專案設定</h2>
         <button className="icon-btn" onClick={onClose}>&#x2715;</button>
       </div>
 
       <div className="settings-content">
         {/* General */}
         <section className="settings-section">
-          <h3>General</h3>
+          <h3>基本</h3>
           <div className="form-row">
-            <label>Display Name</label>
+            <label>顯示名稱</label>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
           </div>
           <div className="form-row">
-            <label>Working Directory</label>
+            <label>工作目錄</label>
             <input type="text" value={cwd} onChange={(e) => setCwd(e.target.value)} />
           </div>
           <div className="form-row">
-            <label>Color</label>
+            <label>顏色</label>
             <div className="color-picker">
               {COLORS.map((c) => (
                 <button key={c} type="button"
@@ -237,14 +279,14 @@ export default function ProjectSettings({
 
         {/* Repository */}
         <section className="settings-section">
-          <h3>Repository</h3>
+          <h3>版本庫</h3>
           <div className="form-row">
             <label>URL</label>
             <input type="url" placeholder="https://github.com/user/repo" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
           </div>
           <div className="form-row">
             <label>Token (PAT)</label>
-            <input type="password" placeholder={repoToken ? "••••••••" : "Personal access token"}
+            <input type="password" placeholder={repoToken ? "••••••••" : "個人存取權杖"}
               value={repoToken === "***" ? "" : repoToken}
               onChange={(e) => setRepoToken(e.target.value)} />
           </div>
@@ -254,46 +296,132 @@ export default function ProjectSettings({
         <div style={{ padding: "0 0 0.5rem" }}>
           <button className="btn-primary" onClick={saveProject} disabled={saving}
             style={{ padding: "0.5rem 1.5rem" }}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? "儲存中..." : "儲存變更"}
           </button>
+          <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
+            儲存會同步更新到 <code>.webmux/project.md</code>，供 AI agent 讀取。
+          </p>
         </div>
 
         {/* Hosts */}
         <section className="settings-section">
-          <h3>Hosts</h3>
+          <h3>部署主機</h3>
+          <p className="settings-hint">
+            每個環境對應的 SSH 目標。儲存後會自動寫入 <code>.webmux/hosts.md</code>，
+            AI agent 部署前會讀取判斷要 SSH 過去還是直接在本機執行。
+          </p>
           {hosts.length === 0 ? (
-            <p className="settings-hint">No hosts configured</p>
+            <p className="settings-hint">尚未設定任何主機</p>
           ) : (
             <div className="host-list">
               {hosts.map((h) => (
-                <div key={h.id} className="host-item">
-                  <span className={`host-env ${h.env}`}>{h.env}</span>
-                  <span className="host-name">{h.name}</span>
-                  <span className="host-target">ssh {h.ssh_target}</span>
-                  <button className="host-delete" onClick={() => deleteHost(h.id)} title="Remove host" aria-label="Remove host"><TrashIcon /></button>
-                </div>
+                editingHostId === h.id && hostDraft ? (
+                  <div key={h.id} className="host-item-edit">
+                    <div className="host-edit-row">
+                      <input
+                        type="text"
+                        placeholder="名稱"
+                        value={hostDraft.name}
+                        onChange={(e) => setHostDraft({ ...hostDraft, name: e.target.value })}
+                      />
+                      <select
+                        value={hostDraft.env}
+                        onChange={(e) => setHostDraft({ ...hostDraft, env: e.target.value })}
+                      >
+                        <option value="production">production</option>
+                        <option value="staging">staging</option>
+                        <option value="development">development</option>
+                      </select>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="SSH 目標（localhost 代表本機）"
+                      value={hostDraft.ssh_target}
+                      onChange={(e) => setHostDraft({ ...hostDraft, ssh_target: e.target.value })}
+                    />
+                    <input
+                      type="text"
+                      placeholder="描述（選填，會寫入 .webmux/hosts.md）"
+                      value={hostDraft.description}
+                      onChange={(e) => setHostDraft({ ...hostDraft, description: e.target.value })}
+                    />
+                    <div className="host-edit-actions">
+                      <button
+                        onClick={cancelEditHost}
+                        disabled={hostBusy}
+                        className="issue-picker-btn secondary"
+                      >
+                        取消
+                      </button>
+                      <button
+                        onClick={saveHost}
+                        disabled={hostBusy}
+                        className="issue-picker-btn primary"
+                      >
+                        {hostBusy ? "儲存中..." : "儲存"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={h.id} className="host-item">
+                    <span className={`host-env ${h.env}`}>{h.env}</span>
+                    <span
+                      className="host-name host-clickable"
+                      onClick={() => startEditHost(h)}
+                      title="點擊編輯"
+                    >
+                      {h.name}
+                    </span>
+                    <span
+                      className="host-target host-clickable"
+                      onClick={() => startEditHost(h)}
+                    >
+                      {h.ssh_target === "localhost" || h.ssh_target === "127.0.0.1"
+                        ? "本機"
+                        : `ssh ${h.ssh_target}`}
+                    </span>
+                    <button
+                      className="host-delete"
+                      onClick={() => deleteHost(h.id)}
+                      title="刪除主機"
+                      aria-label="刪除主機"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
+                )
               ))}
             </div>
           )}
-          <div className="host-add">
-            <input type="text" placeholder="Name (e.g. GCP Prod)"
-              value={newHost.name} onChange={(e) => setNewHost({ ...newHost, name: e.target.value })} />
-            <input type="text" placeholder="SSH target (e.g. gcp-prod)"
-              value={newHost.ssh_target} onChange={(e) => setNewHost({ ...newHost, ssh_target: e.target.value })} />
-            <select value={newHost.env} onChange={(e) => setNewHost({ ...newHost, env: e.target.value })}>
-              <option value="production">production</option>
-              <option value="staging">staging</option>
-              <option value="development">development</option>
-            </select>
-            <button className="btn-primary" onClick={addHost}
-              style={{ flex: "none", padding: "0.4rem 0.8rem" }}>Add</button>
+          <div className="host-add-section">
+            <div className="host-add">
+              <input type="text" placeholder="名稱（例：GCP 正式機）"
+                value={newHost.name} onChange={(e) => setNewHost({ ...newHost, name: e.target.value })} />
+              <input type="text" placeholder="SSH 目標（例：gcp-prod 或 localhost）"
+                value={newHost.ssh_target} onChange={(e) => setNewHost({ ...newHost, ssh_target: e.target.value })} />
+              <select value={newHost.env} onChange={(e) => setNewHost({ ...newHost, env: e.target.value })}>
+                <option value="production">production</option>
+                <option value="staging">staging</option>
+                <option value="development">development</option>
+              </select>
+              <button className="btn-primary" onClick={addHost}
+                style={{ flex: "none", padding: "0.4rem 0.8rem" }}>新增</button>
+            </div>
+            <button
+              onClick={fillLocalhost}
+              className="host-quick-local"
+              type="button"
+              title="一鍵填入本機主機設定"
+            >
+              + 專案在這台 webmux 主機
+            </button>
           </div>
         </section>
 
         {/* .webmux/ docs — DB-backed, regenerates the files on save */}
         <section className="settings-section">
           <h3>
-            Project Docs
+            專案文件
             <button
               onClick={syncWebmux}
               disabled={syncBusy}
@@ -307,33 +435,32 @@ export default function ProjectSettings({
                 background: "transparent",
                 cursor: "pointer",
               }}
-              title="Regenerate .webmux/ files from DB"
+              title="依 DB 內容重新生成 .webmux/ 下所有檔案"
             >
-              {syncBusy ? "Syncing..." : "Sync .webmux/"}
+              {syncBusy ? "同步中..." : "同步 .webmux/"}
             </button>
           </h3>
           <p className="settings-hint">
-            Content goes into <code>.webmux/deploy.md</code> and <code>.webmux/test.md</code>.
-            DB is source of truth; files are regenerated. The pointer block
-            in CLAUDE.md / AGENTS.md tells agents to re-read these before
-            each deploy or verification.
+            下方內容會寫入 <code>.webmux/deploy.md</code> 與 <code>.webmux/test.md</code>。
+            DB 才是真實來源，檔案每次儲存會重新生成。按「同步 .webmux/」只是手動重跑一次，
+            不會改動任何 DB 內容；用在現有檔案被刪或想確認重生。
           </p>
           <div className="form-row">
-            <label>Deploy steps</label>
+            <label>部署步驟</label>
             <textarea
               value={deployDoc}
               onChange={(e) => setDeployDoc(e.target.value)}
-              placeholder="# Deployment&#10;&#10;Commands for staging / production, rollback, cache clears, etc."
+              placeholder="# 部署步驟&#10;&#10;正式 / stage 指令、rollback、清 cache 等"
               rows={6}
               style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
             />
           </div>
           <div className="form-row">
-            <label>Test checklist</label>
+            <label>測試清單</label>
             <textarea
               value={testDoc}
               onChange={(e) => setTestDoc(e.target.value)}
-              placeholder="# Test checklist&#10;&#10;- [ ] smoke: GET /health&#10;- [ ] login flow&#10;- [ ] one checklist item per line; the agent walks through each before marking a deploy green"
+              placeholder="# 測試清單&#10;&#10;- [ ] smoke: GET /health&#10;- [ ] 登入流程&#10;- [ ] 每行一個 checklist 項目；agent 部署後會逐項走過才標綠燈"
               rows={6}
               style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
             />
@@ -345,15 +472,19 @@ export default function ProjectSettings({
               disabled={saving}
               style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
             >
-              {saving ? "Saving..." : "Save docs"}
+              {saving ? "儲存中..." : "儲存文件"}
             </button>
+            <p className="settings-hint" style={{ marginTop: "0.3rem" }}>
+              儲存會：寫入 DB → 立刻重新生成 <code>.webmux/deploy.md</code> / <code>test.md</code>，
+              agent 下次讀就是新內容。不會動 git commit 或推任何地方。
+            </p>
           </div>
         </section>
 
         {/* Agent Integration — pointers in CLAUDE.md, AGENTS.md, ... */}
         <section className="settings-section">
           <h3>
-            Agent Integration
+            AI agent 整合
             {agentPointers.some((p) => !p.hasPointer) && (
               <button
                 onClick={addAllMissingPointers}
@@ -367,16 +498,37 @@ export default function ProjectSettings({
                   background: "transparent",
                   cursor: "pointer",
                 }}
-                title="Add .webmux/ pointer to every missing target"
+                title="對每個還沒有 pointer 的檔案一次加入"
               >
-                {pointerBusyFor === "*" ? "Adding..." : "Add all missing"}
+                {pointerBusyFor === "*" ? "加入中..." : "一次補齊所有缺少的"}
               </button>
             )}
           </h3>
           <p className="settings-hint">
-            A short <code>.webmux/</code> pointer block tells each agent where
-            to find project context. File is created if missing.
+            在各家 AI agent 的初始檔（<code>CLAUDE.md</code>、<code>AGENTS.md</code>）底部
+            加一段指向 <code>.webmux/</code> 的區塊，告訴 agent 部署 / 測試前要重讀那些檔。
+            檔案不存在會幫你建立。
           </p>
+          <div style={{ marginBottom: "0.5rem" }}>
+            <button
+              onClick={() => setShowPointerPreview((v) => !v)}
+              className="settings-hint"
+              style={{
+                fontSize: "0.78rem",
+                padding: "0.15rem 0",
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                color: "#a5b4fc",
+              }}
+              type="button"
+            >
+              {showPointerPreview ? "▾" : "▸"} 預覽會附加的內容
+            </button>
+            {showPointerPreview && pointerBlock && (
+              <pre className="pointer-preview">{pointerBlock.trim()}</pre>
+            )}
+          </div>
           <div className="agent-pointer-list">
             {agentPointers.map((p) => (
               <div
@@ -389,7 +541,8 @@ export default function ProjectSettings({
                   <code>{p.filename}</code>{" "}
                   <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
                     ({p.agent})
-                    {!p.exists && " — will be created"}
+                    {!p.exists && " — 會新建此檔"}
+                    {p.hasPointer && " — 已有 pointer"}
                   </span>
                 </span>
                 {!p.hasPointer && (
@@ -399,7 +552,7 @@ export default function ProjectSettings({
                     disabled={pointerBusyFor !== null}
                     style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
                   >
-                    {pointerBusyFor === p.filename ? "Adding..." : "Add pointer"}
+                    {pointerBusyFor === p.filename ? "加入中..." : "加入 pointer"}
                   </button>
                 )}
               </div>
@@ -410,18 +563,23 @@ export default function ProjectSettings({
         {/* CLAUDE.md deploy-section scan (informational only) */}
         {claudeMd?.exists && (
           <section className="settings-section">
-            <h3>CLAUDE.md scan</h3>
+            <h3>CLAUDE.md 內容掃描</h3>
+            <p className="settings-hint">
+              只掃描、不會修改 <code>CLAUDE.md</code>。看目前有沒有部署相關的章節（含
+              「deploy / 部署 / docker compose / ssh」等關鍵字），方便你判斷要不要把
+              內容整理到上面的「部署步驟」區。
+            </p>
             <div className={`claudemd-status ${claudeMd.hasDeploy ? "ok" : "warn"}`}>
               <span className="claudemd-icon">{claudeMd.hasDeploy ? "✅" : "⚠"}</span>
               <span>
                 {claudeMd.hasDeploy
-                  ? "Deploy instructions found"
-                  : "No deploy instructions detected"}
+                  ? "偵測到部署說明"
+                  : "沒偵測到部署說明"}
               </span>
             </div>
             {claudeMd.allSections.length > 0 && (
               <p className="settings-hint">
-                Sections: {claudeMd.allSections.join(", ")}
+                章節：{claudeMd.allSections.join("、")}
               </p>
             )}
             {claudeMd.hasDeploy && claudeMd.deploySections.map((s, i) => (
@@ -436,8 +594,10 @@ export default function ProjectSettings({
         {/* Chat Session */}
         {chatSessions.length > 1 && (
           <section className="settings-section">
-            <h3>Chat Session</h3>
-            <p className="settings-hint">Multiple Claude Code sessions found. Select which one to show in Chat view:</p>
+            <h3>Chat session</h3>
+            <p className="settings-hint">
+              這個專案有多個 Claude Code session。選一個當預設顯示：
+            </p>
             <div className="chat-session-list">
               {chatSessions.map((s) => (
                 <button key={s.sessionId}
@@ -447,7 +607,7 @@ export default function ProjectSettings({
                   <span className="chat-session-time">
                     {new Date(s.mtime).toLocaleString()}
                   </span>
-                  {s.active && <span className="chat-session-badge">active</span>}
+                  {s.active && <span className="chat-session-badge">目前</span>}
                 </button>
               ))}
             </div>
@@ -456,9 +616,13 @@ export default function ProjectSettings({
 
         {/* Danger Zone */}
         <section className="settings-section danger-zone">
-          <h3>Danger Zone</h3>
+          <h3>危險區</h3>
+          <p className="settings-hint">
+            刪除會移除 DB 中的專案紀錄（hosts、notes、exchanges、issues 全部連帶消失）
+            並結束 tmux session。不會動專案目錄裡的檔案。無法還原。
+          </p>
           <button className="btn-danger" onClick={deleteProject}>
-            Delete Project
+            刪除專案
           </button>
         </section>
       </div>
