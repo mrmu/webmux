@@ -1616,6 +1616,19 @@ select {
   color: var(--accent);
 }
 
+.filename-link {
+  text-decoration: none;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+.filename-link:hover {
+  background: rgba(99,102,241,0.12);
+}
+.filename-link code {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 .pointer-error {
   margin: 0.3rem 0 0;
   padding: 0.4rem 0.6rem;

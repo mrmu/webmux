@@ -187,7 +187,15 @@ function WorkspacePageContent({
 
         {showFiles && <FileBrowser sessionName={projectName} onOpenFile={openFile} onClose={() => setShowFiles(false)} />}
         {showNotes && <NotesPanel sessionName={projectName} onClose={() => setShowNotes(false)} onAskAI={askAIFromNote} />}
-        {showSettings && <ProjectSettings projectName={projectName} onClose={() => setShowSettings(false)} onDeleted={() => router.push("/projects")} onAskAI={askAIFromNote} />}
+        {showSettings && (
+          <ProjectSettings
+            projectName={projectName}
+            onClose={() => setShowSettings(false)}
+            onDeleted={() => router.push("/projects")}
+            onAskAI={askAIFromNote}
+            onOpenFile={(path) => { setShowSettings(false); openFile(path); }}
+          />
+        )}
       </div>
     </div>
   );

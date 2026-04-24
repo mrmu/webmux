@@ -28,11 +28,13 @@ export default function ProjectSettings({
   onClose,
   onDeleted,
   onAskAI,
+  onOpenFile,
 }: {
   projectName: string;
   onClose: () => void;
   onDeleted: () => void;
   onAskAI?: (text: string) => void;
+  onOpenFile?: (path: string) => void;
 }) {
   // Project info
   const [displayName, setDisplayName] = useState("");
@@ -677,11 +679,25 @@ export default function ProjectSettings({
                 >
                   <span className="claudemd-icon">{p.hasPointer ? "✅" : "⚠"}</span>
                   <span style={{ flex: 1 }}>
-                    <code>{p.filename}</code>{" "}
+                    {p.exists && onOpenFile ? (
+                      <a
+                        className="filename-link"
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onOpenFile(p.filename);
+                        }}
+                        title="在編輯器開啟"
+                      >
+                        <code>{p.filename}</code>
+                      </a>
+                    ) : (
+                      <code>{p.filename}</code>
+                    )}{" "}
                     <span className="settings-hint" style={{ marginLeft: "0.25rem" }}>
                       ({p.agent})
                       {!p.exists && " — 會新建此檔"}
-                      {p.hasPointer && " — 已有 pointer"}
+                      {p.hasPointer && " — 已有指向"}
                     </span>
                   </span>
                   {!p.hasPointer && (
