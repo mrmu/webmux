@@ -49,6 +49,3 @@ src/generated/
 
 # playwright mcp output
 .playwright-mcp/
-
-# webmux-managed project context — DB is source of truth
-.webmux/
