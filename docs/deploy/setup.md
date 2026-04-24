@@ -68,7 +68,7 @@ sudo tailscale up
 
 ```bash
 cd ~
-git clone git@github.com:mrmu/webmux.git
+git clone git@github.com:mrmu/comux.git
 cd webmux
 
 # 先產生兩個 secret，再寫進 .env (DATABASE_URL 和 POSTGRES_PASSWORD 必須同一個密碼)
@@ -205,7 +205,7 @@ npm run dev
 
 ## 個人專案正式機
 
-網址: https://webmux.audilu.com
+網址: https://comux.audilu.com
 已透過加入tailscale 能用以下ssh指令登入，且需要時也能用sudo su切換成管理者權限:
 
 ```

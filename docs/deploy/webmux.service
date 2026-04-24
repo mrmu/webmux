@@ -1,6 +1,6 @@
 [Unit]
 Description=webmux — Next.js + tmux WebSocket terminal
-Documentation=https://github.com/mrmu/webmux
+Documentation=https://github.com/mrmu/comux
 After=network-online.target docker.service
 Wants=network-online.target
 
