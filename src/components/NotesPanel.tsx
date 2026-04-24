@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
+import { TrashIcon } from "./icons";
 
 interface Note {
   id: number;
@@ -250,7 +251,7 @@ export default function NotesPanel({
                     title="Delete note"
                     aria-label="Delete note"
                   >
-                    &#x2715;
+                    <TrashIcon />
                   </button>
                 </div>
                 {editing ? (

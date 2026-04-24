@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, FormEvent } from "react";
 import { api } from "@/lib/api";
+import { TrashIcon } from "./icons";
 
 interface User {
   id: number;
@@ -151,7 +152,7 @@ export default function AccountPage({
                 </div>
                 {u.email === currentEmail
                   ? <span className="user-badge">you</span>
-                  : <button className="user-del" onClick={() => deleteUser(u.id, u.email)}>&times;</button>
+                  : <button className="user-del" onClick={() => deleteUser(u.id, u.email)} title="Delete user" aria-label="Delete user"><TrashIcon /></button>
                 }
               </div>
             ))}

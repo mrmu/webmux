@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { TrashIcon } from "@/components/icons";
 import {
   ISSUE_STATUSES,
   ISSUE_SEVERITIES,
@@ -162,8 +163,8 @@ export default function IssueDetailPage({
           &#x2190;
         </button>
         <h1 className="top-title">#{issue.id}</h1>
-        <button className="icon-btn" title="Delete" onClick={del}>
-          &#x2715;
+        <button className="icon-btn" title="Delete" aria-label="Delete" onClick={del}>
+          <TrashIcon size={16} />
         </button>
       </header>
 

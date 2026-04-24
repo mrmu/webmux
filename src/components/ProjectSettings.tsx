@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { TrashIcon } from "./icons";
 
 const COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
@@ -269,7 +270,7 @@ export default function ProjectSettings({
                   <span className={`host-env ${h.env}`}>{h.env}</span>
                   <span className="host-name">{h.name}</span>
                   <span className="host-target">ssh {h.ssh_target}</span>
-                  <button className="host-delete" onClick={() => deleteHost(h.id)}>&times;</button>
+                  <button className="host-delete" onClick={() => deleteHost(h.id)} title="Remove host" aria-label="Remove host"><TrashIcon /></button>
                 </div>
               ))}
             </div>
