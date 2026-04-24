@@ -244,6 +244,92 @@ select {
 
 .top-title { font-size: 1.3rem; font-weight: 700; flex: 1; }
 
+/* ─── Section Switcher (title as dropdown) ──────────────────────── */
+.section-switcher {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.section-switcher-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s ease;
+  max-width: 100%;
+}
+.section-switcher-trigger:hover,
+.section-switcher-trigger.open {
+  background: rgba(255, 255, 255, 0.06);
+}
+.section-switcher-trigger .section-switcher-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.section-switcher-trigger svg:last-child {
+  opacity: 0.6;
+  transition: transform 0.12s ease;
+}
+.section-switcher-trigger.open svg:last-child {
+  transform: rotate(180deg);
+}
+
+.section-switcher-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  min-width: 200px;
+  padding: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.section-switcher-item {
+  display: grid;
+  grid-template-columns: 18px 1fr 16px;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  width: 100%;
+}
+.section-switcher-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.section-switcher-item.active {
+  color: var(--accent, #8b5cf6);
+}
+.section-switcher-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+}
+
 .icon-btn {
   width: 40px;
   height: 40px;

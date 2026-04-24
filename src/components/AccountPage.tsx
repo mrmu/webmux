@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, FormEvent } from "react";
 import { api } from "@/lib/api";
 import { TrashIcon } from "./icons";
+import SectionSwitcher from "./SectionSwitcher";
 
 interface User {
   id: number;
@@ -13,11 +14,9 @@ interface User {
 
 export default function AccountPage({
   currentEmail,
-  onBack,
   onLogout,
 }: {
   currentEmail: string;
-  onBack: () => void;
   onLogout: () => void;
 }) {
   const [users, setUsers] = useState<User[]>([]);
@@ -95,9 +94,8 @@ export default function AccountPage({
   return (
     <div className="screen">
       <header className="top-bar">
-        <button className="icon-btn back-btn" onClick={onBack}>&larr;</button>
         <img src="/logo-robot.png" alt="" className="top-logo" />
-        <h1 className="top-title">Account</h1>
+        <SectionSwitcher current="account" />
         <button className="logout-btn" onClick={logout}>Logout</button>
       </header>
 

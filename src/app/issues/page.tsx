@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import SectionSwitcher from "@/components/SectionSwitcher";
 import { api } from "@/lib/api";
 import { ISSUE_STATUSES, ISSUE_SEVERITIES, isClosedStatus } from "@/lib/issues";
 
@@ -82,15 +83,8 @@ function IssuesListPageContent() {
   return (
     <div className="screen">
       <header className="top-bar">
-        <button
-          className="icon-btn"
-          title="Back"
-          onClick={() => router.push("/projects")}
-        >
-          &#x2190;
-        </button>
         <img src="/logo-robot.png" alt="" className="top-logo" />
-        <h1 className="top-title">Issues</h1>
+        <SectionSwitcher current="issues" />
         <button
           className="icon-btn"
           title="New issue"

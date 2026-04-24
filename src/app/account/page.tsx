@@ -33,7 +33,6 @@ export default function AccountRoute() {
   return (
     <AccountPage
       currentEmail={userEmail}
-      onBack={() => router.push("/projects")}
       onLogout={() => router.replace("/login")}
     />
   );
