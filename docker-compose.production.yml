@@ -22,15 +22,24 @@ services:
     profiles: ["disabled"]
 
   # 把 nginx-proxy 流量轉到宿主機的 Node process
+  #
+  # 注意：docker compose v5 在 auto-load .env 時，對值含逗號的變數會在第一個逗號
+  # 處截斷（例如 VIRTUAL_HOST=a.com,b.com 會被當成 a.com）。要讓 nginx-proxy
+  # 支援多 host（"a.com,b.com" 是 nginx-proxy 官方支援格式），重新 up 前先手動
+  # export env：
+  #   set -a; . ./.env; set +a
+  #   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --force-recreate prod-proxy
+  # 或 inline：
+  #   VIRTUAL_HOST="a.com,b.com" docker compose ... up -d --force-recreate prod-proxy
   prod-proxy:
     image: alpine/socat
     container_name: webmux-proxy
     command: TCP-LISTEN:3000,fork,reuseaddr TCP:host.docker.internal:3000
     restart: unless-stopped
     environment:
-      VIRTUAL_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
+      VIRTUAL_HOST: ${VIRTUAL_HOST:-comux.audilu.com}
       VIRTUAL_PORT: "3000"
-      LETSENCRYPT_HOST: ${VIRTUAL_HOST:-webmux.pangogo.com}
+      LETSENCRYPT_HOST: ${VIRTUAL_HOST:-comux.audilu.com}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-audilu@panmedia.asia}
     extra_hosts:
       - "host.docker.internal:host-gateway"
