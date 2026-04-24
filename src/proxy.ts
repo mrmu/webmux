@@ -28,12 +28,15 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Allow public paths and static assets
+  // Allow public paths and static assets. The extension check lets
+  // everything under /public/ (logo, favicon, apple-touch-icon, plus any
+  // future fonts/images) through without a cookie — they are served as-is
+  // by Next.js static handling anyway and are not sensitive.
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/config") ||
-    pathname === "/favicon.ico"
+    /\.(png|ico|svg|jpe?g|webp|gif|woff2?|ttf|avif)$/i.test(pathname)
   ) {
     return NextResponse.next();
   }
