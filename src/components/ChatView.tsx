@@ -167,6 +167,11 @@ export default function ChatView({
   const pendingUpdateRef = useRef<ChatMessage[] | null>(null);
   // Set on send to force scroll-to-bottom even when the user was scrolled up.
   const forceScrollRef = useRef(false);
+  // Sticky-follow flag: true = auto-scroll on every new message. Flipped off
+  // when the user scrolls up, back on when they return to the bottom.
+  // Decoupling this from a per-update distance check avoids a large incoming
+  // message silently pushing them past the threshold and breaking follow.
+  const followRef = useRef(true);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -368,18 +373,33 @@ export default function ChatView({
     };
   }, []);
 
+  // Watch user scroll to toggle followRef: near-bottom → on, away → off.
+  // 40px tolerance accommodates sub-pixel rounding and mobile rubber-banding.
   useEffect(() => {
     const el = messagesRef.current;
     if (!el) return;
-    if (scrollToBottomRef.current) {
+    const onScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      followRef.current = atBottom;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (!el) return;
+    // Hard overrides (session switch / send) always jump to bottom and also
+    // re-engage follow so subsequent chunks keep scrolling.
+    if (scrollToBottomRef.current || forceScrollRef.current) {
       scrollToBottomRef.current = false;
+      forceScrollRef.current = false;
+      followRef.current = true;
       el.scrollTop = el.scrollHeight;
       return;
     }
-    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-    if (forceScrollRef.current || isAtBottom) {
+    if (followRef.current) {
       el.scrollTop = el.scrollHeight;
-      forceScrollRef.current = false;
     }
   }, [messages, pendingUserTexts]);
 
