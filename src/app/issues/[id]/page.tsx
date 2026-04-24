@@ -21,6 +21,22 @@ interface IssueEvent {
   created_at: number;
 }
 
+interface LinkedNote {
+  id: number;
+  content: string;
+  status: string;
+  pr_url: string;
+  created_at: number;
+  updated_at: number;
+  exchanges: {
+    id: number;
+    session_id: string;
+    asked_at: number;
+    prompt: string;
+    reply: string;
+  }[];
+}
+
 interface IssueDetail {
   id: number;
   project_name: string;
@@ -56,6 +72,7 @@ export default function IssueDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const [issue, setIssue] = useState<IssueDetail | null>(null);
+  const [linkedNotes, setLinkedNotes] = useState<LinkedNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [comment, setComment] = useState("");
@@ -67,7 +84,12 @@ export default function IssueDetailPage({
 
   const load = useCallback(async () => {
     try {
-      setIssue(await api.get(`/api/issues/${id}`));
+      const [i, n] = await Promise.all([
+        api.get(`/api/issues/${id}`),
+        api.get(`/api/issues/${id}/notes`),
+      ]);
+      setIssue(i);
+      setLinkedNotes(n);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
     } finally {
@@ -188,6 +210,48 @@ export default function IssueDetailPage({
 
         {issue.body && (
           <div className="issue-body">{issue.body}</div>
+        )}
+
+        {linkedNotes.length > 0 && (
+          <div className="account-section">
+            <h3>Linked Notes ({linkedNotes.length})</h3>
+            <div className="linked-notes-list">
+              {linkedNotes.map((n) => (
+                <div
+                  key={n.id}
+                  className={`linked-note-card note-status-${n.status.toLowerCase()}`}
+                >
+                  <div className="linked-note-head">
+                    <span className={`note-status-badge ${n.status.toLowerCase()}`}>
+                      {n.status.toLowerCase().replace("_", " ")}
+                    </span>
+                    <span className="linked-note-id">note #{n.id}</span>
+                    {n.pr_url && (
+                      <a className="note-pr-link" href={n.pr_url} target="_blank" rel="noreferrer">
+                        PR
+                      </a>
+                    )}
+                  </div>
+                  <div className="linked-note-content">{n.content}</div>
+                  {n.exchanges.length > 0 && (
+                    <details className="linked-note-exchanges">
+                      <summary>
+                        {n.exchanges.length} {n.exchanges.length === 1 ? "reply" : "replies"}
+                      </summary>
+                      {n.exchanges.map((ex) => (
+                        <div key={ex.id} className="note-exchange">
+                          <div className="note-exchange-meta">
+                            {formatDate(ex.asked_at)} · session {ex.session_id.slice(0, 8)}
+                          </div>
+                          <div className="note-exchange-reply">{ex.reply}</div>
+                        </div>
+                      ))}
+                    </details>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="account-section">

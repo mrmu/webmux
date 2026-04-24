@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import { TrashIcon, CirclePlusIcon } from "./icons";
+import IssuePicker from "./IssuePicker";
 
 interface Note {
   id: number;
@@ -68,6 +69,7 @@ export default function NotesPanel({
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [exchangesById, setExchangesById] = useState<Record<number, NoteExchange[]>>({});
   const [loadingExchanges, setLoadingExchanges] = useState<number | null>(null);
+  const [pickerNoteId, setPickerNoteId] = useState<number | null>(null);
   const editRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -164,13 +166,7 @@ export default function NotesPanel({
     loadNotes();
   };
 
-  const promoteToIssue = async (n: Note) => {
-    if (n.issue_id) return;
-    try {
-      const res = await api.post(`/api/notes/${n.id}/promote`, {});
-      if (res?.issue_id) loadNotes();
-    } catch { /* ignore */ }
-  };
+  // Promote + link-to-existing both go through IssuePicker now.
 
   const askAI = (n: Note) => {
     if (!onAskAI) return;
@@ -220,10 +216,32 @@ export default function NotesPanel({
                     <option value="AWAITING">awaiting</option>
                     <option value="DONE">done</option>
                   </select>
-                  {n.issue_id && (
-                    <span className="note-issue-ref" title="Tracked as issue">
+                  {n.issue_id ? (
+                    <a
+                      className="note-issue-ref clickable"
+                      href={`/issues/${n.issue_id}`}
+                      title="Jump to issue"
+                    >
                       #{n.issue_id}
-                    </span>
+                    </a>
+                  ) : (
+                    <div style={{ position: "relative" }}>
+                      <button
+                        className="note-link-issue-btn"
+                        onClick={() => setPickerNoteId(n.id)}
+                        title="Link this note to an issue"
+                      >
+                        <CirclePlusIcon /> issue
+                      </button>
+                      {pickerNoteId === n.id && (
+                        <IssuePicker
+                          projectName={sessionName}
+                          noteId={n.id}
+                          onLinked={loadNotes}
+                          onClose={() => setPickerNoteId(null)}
+                        />
+                      )}
+                    </div>
                   )}
                   {n.pr_url && (
                     <a className="note-pr-link" href={n.pr_url} target="_blank" rel="noreferrer">
@@ -290,16 +308,6 @@ export default function NotesPanel({
                     </>
                   ) : (
                     <>
-                      {!n.issue_id && (
-                        <button
-                          className="note-delete note-action-icon"
-                          onClick={() => promoteToIssue(n)}
-                          title="Create a tracked Issue from this note"
-                        >
-                          <CirclePlusIcon />
-                          <span>Track as issue</span>
-                        </button>
-                      )}
                       {onAskAI && n.status !== "DONE" && (
                         <button
                           className="note-delete"
