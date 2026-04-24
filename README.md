@@ -1,6 +1,23 @@
-# comux
+<p align="center">
+  <img src="public/logo-full.png" alt="comux" width="320" />
+</p>
 
-給 Claude Code 用的網頁版 tmux session 管理工具。用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案。
+<p align="center">
+  <strong>給 Claude Code 用的網頁版 tmux session 管理工具</strong>
+</p>
+
+<p align="center">
+  用手機或電腦瀏覽器同時管理多個 AI 輔助開發的專案
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169e1?logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/tmux-via%20node--pty-1bb91f?logo=tmux&logoColor=white" alt="tmux" />
+</p>
+
+---
 
 ## 能做什麼
 
