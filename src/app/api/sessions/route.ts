@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       height: live?.height || 0,
       activity: live?.activity || "",
       running: liveNames.has(p.name),
+      unmanaged: false,
       hosts: p.hosts.map((h) => ({
         id: h.id,
         name: h.name,
@@ -66,6 +67,7 @@ export async function GET(request: NextRequest) {
         height: s.height,
         activity: s.activity,
         running: true,
+        unmanaged: true,
         hosts: [],
       });
     }

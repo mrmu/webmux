@@ -49,6 +49,8 @@ function esc(str: string): string {
   return div.innerHTML;
 }
 
+const PENDING_TIMEOUT_MS = 60_000;
+
 function renderMarkdown(text: string): string {
   if (!text) return "";
   let html = esc(text);
@@ -142,8 +144,12 @@ export default function ChatView({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Optimistic echo: messages just sent by the user, shown immediately while
   // we wait for Claude Code to write them into JSONL and SSE to round-trip.
-  // Entries are dropped once the real message appears in `messages`.
-  const [pendingUserTexts, setPendingUserTexts] = useState<string[]>([]);
+  // Entries are dropped once the real message appears in `messages`, or after
+  // PENDING_TIMEOUT_MS as a safety net — Claude Code wraps interrupts as
+  // `<system-reminder>...your text...</system-reminder>` when sent during a
+  // running turn, so exact-equality dedup misses; we match by includes() and
+  // bound staleness with a timeout.
+  const [pendingUserTexts, setPendingUserTexts] = useState<{ text: string; sentAt: number }[]>([]);
   const draftKey = `chat-draft:${sessionName}`;
   // Initialize from localStorage so the draft is present on first paint.
   // Wrapped because iOS private browsing historically threw on any access.
@@ -259,13 +265,15 @@ export default function ChatView({
   // Drop optimistic entries whose text has landed in the real log,
   // then apply the latest messages (buffering if user is selecting text).
   const applyLatestMessages = useCallback((msgs: ChatMessage[]) => {
-    const realUserTexts = new Set(
-      msgs
-        .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
-        .map((m) => m.text as string)
-    );
+    const realUserTexts = msgs
+      .filter((m) => m.role === "user" && m.content_type === "text" && m.text)
+      .map((m) => m.text as string);
+    const now = Date.now();
     setPendingUserTexts((prev) => {
-      const next = prev.filter((t) => !realUserTexts.has(t));
+      const next = prev.filter((p) => {
+        if (now - p.sentAt > PENDING_TIMEOUT_MS) return false;
+        return !realUserTexts.some((t) => t === p.text || t.includes(p.text));
+      });
       return next.length === prev.length ? prev : next;
     });
     if (userSelectingRef.current) {
@@ -425,13 +433,28 @@ export default function ChatView({
     if (pendingUserTexts.length === 0) return messages;
     return [
       ...messages,
-      ...pendingUserTexts.map((text) => ({
+      ...pendingUserTexts.map((p) => ({
         role: "user",
         content_type: "text",
-        text,
+        text: p.text,
       })),
     ];
   }, [messages, pendingUserTexts]);
+
+  // Safety net: even if SSE never fires (e.g. Claude wasn't running so no
+  // JSONL update lands), prune pending entries that have aged past the
+  // timeout so the optimistic echo doesn't pin forever.
+  useEffect(() => {
+    if (pendingUserTexts.length === 0) return;
+    const id = setInterval(() => {
+      const now = Date.now();
+      setPendingUserTexts((prev) => {
+        const next = prev.filter((p) => now - p.sentAt < PENDING_TIMEOUT_MS);
+        return next.length === prev.length ? prev : next;
+      });
+    }, 5000);
+    return () => clearInterval(id);
+  }, [pendingUserTexts.length]);
 
   const [sendError, setSendError] = useState("");
 
@@ -443,7 +466,7 @@ export default function ChatView({
     // Show the user's prompt + scroll right away. The ui-state check + tmux
     // send can take seconds on a busy session; the echo should never wait.
     forceScrollRef.current = true;
-    setPendingUserTexts((prev) => [...prev, text]);
+    setPendingUserTexts((prev) => [...prev, { text, sentAt: Date.now() }]);
     setInput("");
     try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
 
@@ -451,7 +474,7 @@ export default function ChatView({
     // don't all vanish on a single failure.
     const rollback = () => {
       setPendingUserTexts((prev) => {
-        const idx = prev.indexOf(text);
+        const idx = prev.findIndex((p) => p.text === text);
         if (idx < 0) return prev;
         const copy = [...prev];
         copy.splice(idx, 1);

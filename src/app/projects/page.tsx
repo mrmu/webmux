@@ -13,6 +13,7 @@ interface SessionInfo {
   running: boolean;
   cwd: string;
   command: string;
+  unmanaged?: boolean;
 }
 
 export default function ProjectsPage() {
@@ -45,29 +46,37 @@ export default function ProjectsPage() {
           </div>
         ) : (
           sessions.map((s) => (
-            <div key={s.name} className="session-card" onClick={() => {
-              if (s.running) {
-                router.push(`/projects/${s.name}`);
-              } else {
-                (async () => {
-                  try {
-                    await api.post("/api/sessions", {
-                      name: s.name, display_name: s.display_name,
-                      cwd: s.cwd, command: s.command, color: s.color,
-                    });
-                    loadSessions();
-                  } catch { /* ignore */ }
-                })();
-              }
-            }}>
+            <div
+              key={s.name}
+              className="session-card"
+              style={s.unmanaged ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+              title={s.unmanaged ? "External tmux session — not managed by comux" : undefined}
+              onClick={() => {
+                if (s.unmanaged) return;
+                if (s.running) {
+                  router.push(`/projects/${s.name}`);
+                } else {
+                  (async () => {
+                    try {
+                      await api.post("/api/sessions", {
+                        name: s.name, display_name: s.display_name,
+                        cwd: s.cwd, command: s.command, color: s.color,
+                      });
+                      loadSessions();
+                    } catch { /* ignore */ }
+                  })();
+                }
+              }}>
               <div className="session-dot" style={{ background: s.color, opacity: s.running ? 1 : 0.4 }}>
                 {s.display_name.charAt(0).toUpperCase()}
               </div>
               <div className="session-card-info">
                 <div className="session-card-name">{s.display_name}</div>
-                <div className="session-card-meta">{s.name} &middot; {s.running ? "running" : "stopped"}</div>
+                <div className="session-card-meta">
+                  {s.name} &middot; {s.unmanaged ? "external" : (s.running ? "running" : "stopped")}
+                </div>
               </div>
-              <div className={`session-card-status${s.running ? " active" : ""}`} />
+              <div className={`session-card-status${s.running && !s.unmanaged ? " active" : ""}`} />
             </div>
           ))
         )}
