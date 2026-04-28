@@ -1722,12 +1722,15 @@ select {
 .filename-link {
   text-decoration: none;
   border-radius: 3px;
-  transition: background 0.15s;
+  color: #a5b4fc;
+  transition: background 0.15s, color 0.15s;
 }
 .filename-link:hover {
-  background: rgba(99,102,241,0.12);
+  background: rgba(99,102,241,0.18);
+  color: #c7d2fe;
 }
 .filename-link code {
+  color: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }

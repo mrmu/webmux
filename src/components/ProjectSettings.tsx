@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { TrashIcon } from "./icons";
+import { classifyRepoUrl } from "@/lib/repo-url";
 
 const COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
@@ -21,6 +22,196 @@ interface ChatSession {
   sessionId: string;
   mtime: number;
   active: boolean;
+}
+
+interface GitStatus {
+  cwd: string;
+  repoUrl: string;
+  repoUrlKind: "ssh" | "https" | "unknown" | "empty";
+  cwdExists: boolean;
+  isDirectory: boolean;
+  isEmpty: boolean;
+  isGitRepo: boolean;
+  remoteUrl: string;
+  remoteMatches: boolean | null;
+}
+
+interface HealthCheck {
+  id: string;
+  label: string;
+  ok: boolean | null;
+  detail: string;
+  hint: string;
+}
+
+function RepoUrlHint({ url }: { url: string }) {
+  const kind = classifyRepoUrl(url);
+  if (kind === "empty") return null;
+  if (kind === "ssh") {
+    return (
+      <p className="settings-hint" style={{ margin: "-0.25rem 0 0.5rem" }}>
+        ✅ SSH 格式，可 push。需先把這台 comux 主機的 ssh 公鑰加到 git host 的 deploy keys。
+      </p>
+    );
+  }
+  if (kind === "https") {
+    return (
+      <p className="settings-hint" style={{ margin: "-0.25rem 0 0.5rem", color: "#fbbf24" }}>
+        ⚠ HTTPS 格式：可讀取，但 agent 改完程式碼無法 push 回 repo。
+        若需要 push，請改用 SSH（<code>git@host:user/repo.git</code>）。
+      </p>
+    );
+  }
+  return (
+    <p className="settings-hint" style={{ margin: "-0.25rem 0 0.5rem", color: "#fbbf24" }}>
+      ⚠ 無法識別 URL 格式。建議用 <code>git@host:user/repo.git</code>。
+    </p>
+  );
+}
+
+function HealthCheckSection({
+  checks,
+  busy,
+  onRerun,
+}: {
+  checks: HealthCheck[] | null;
+  busy: boolean;
+  onRerun: () => void;
+}) {
+  const failing = checks?.filter((c) => c.ok === false).length ?? 0;
+  const passing = checks?.filter((c) => c.ok === true).length ?? 0;
+  const skipped = checks?.filter((c) => c.ok === null).length ?? 0;
+  return (
+    <section className="settings-section">
+      <h3>
+        健檢
+        <button
+          onClick={onRerun}
+          disabled={busy}
+          style={{
+            marginLeft: "0.75rem",
+            fontSize: "0.8rem",
+            padding: "0.15rem 0.5rem",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 4,
+            background: "transparent",
+            color: "var(--text-muted)",
+            cursor: "pointer",
+          }}
+          title="重跑所有檢查"
+        >
+          {busy ? "檢查中..." : "重跑"}
+        </button>
+      </h3>
+      <p className="settings-hint">
+        檢查 comux 在這台主機是否能對這個專案開工：目錄權限、git remote、ssh push、CLI 工具。
+        每次設定有變動會自動重跑；也可手動點「重跑」。
+      </p>
+      {checks === null ? (
+        <p className="settings-hint">{busy ? "檢查中..." : "尚未檢查"}</p>
+      ) : checks.length === 0 ? (
+        <p className="settings-hint">沒有檢查項目</p>
+      ) : (
+        <>
+          <p className="settings-hint" style={{ marginBottom: "0.5rem" }}>
+            {failing === 0
+              ? `✅ 全部通過（${passing} / ${passing + skipped}，${skipped} 項略過）`
+              : `⚠ ${failing} 項失敗、${passing} 項通過${skipped > 0 ? `、${skipped} 項略過` : ""}`}
+          </p>
+          <div className="agent-pointer-list">
+            {checks.map((c) => (
+              <div key={c.id} style={{ marginBottom: "0.4rem" }}>
+                <div
+                  className={`claudemd-status ${
+                    c.ok === true ? "ok" : c.ok === false ? "warn" : ""
+                  }`}
+                >
+                  <span className="claudemd-icon">
+                    {c.ok === true ? "✅" : c.ok === false ? "⚠" : "○"}
+                  </span>
+                  <span style={{ flex: 1 }}>
+                    <strong>{c.label}</strong>
+                    {c.detail && (
+                      <span className="settings-hint" style={{ marginLeft: "0.5rem" }}>
+                        — {c.detail}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                {c.ok === false && c.hint && (
+                  <p className="pointer-error" style={{ marginLeft: "1.5rem" }}>{c.hint}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function GitStatusBlock({
+  status,
+  cwd,
+  repoUrl,
+  cloneBusy,
+  cloneError,
+  onClone,
+}: {
+  status: GitStatus | null;
+  cwd: string;
+  repoUrl: string;
+  cloneBusy: boolean;
+  cloneError: string;
+  onClone: () => void;
+}) {
+  if (!cwd || !repoUrl) return null;
+  if (!status) return null;
+
+  const canClone = !status.isGitRepo && (status.isEmpty || !status.cwdExists);
+
+  let line: { icon: string; text: string; tone: "ok" | "warn" };
+  if (status.isGitRepo) {
+    if (status.remoteMatches === false) {
+      line = {
+        icon: "⚠",
+        tone: "warn",
+        text: `已 clone，但 remote 不一致：${status.remoteUrl || "(無)"}`,
+      };
+    } else {
+      line = { icon: "✅", tone: "ok", text: "已 clone，remote 與設定一致" };
+    }
+  } else if (!status.cwdExists) {
+    line = { icon: "⚠", tone: "warn", text: "工作目錄不存在 — 可從這裡 clone" };
+  } else if (status.isEmpty) {
+    line = { icon: "⚠", tone: "warn", text: "工作目錄是空的 — 可從這裡 clone" };
+  } else {
+    line = {
+      icon: "⚠",
+      tone: "warn",
+      text: "目錄有檔案但不是 git repo — 請手動處理（移走檔案或在主機上 git init）",
+    };
+  }
+
+  return (
+    <div style={{ marginTop: "0.5rem" }}>
+      <div className={`claudemd-status ${line.tone}`}>
+        <span className="claudemd-icon">{line.icon}</span>
+        <span style={{ flex: 1 }}>{line.text}</span>
+        {canClone && (
+          <button
+            className="btn-primary"
+            onClick={onClone}
+            disabled={cloneBusy}
+            style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
+          >
+            {cloneBusy ? "Clone 中..." : "Clone"}
+          </button>
+        )}
+      </div>
+      {cloneError && <p className="pointer-error">{cloneError}</p>}
+    </div>
+  );
 }
 
 export default function ProjectSettings({
@@ -56,6 +247,15 @@ export default function ProjectSettings({
 
   // Chat sessions
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+
+  // Git status (cwd state, remote match)
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
+  const [cloneBusy, setCloneBusy] = useState(false);
+  const [cloneError, setCloneError] = useState("");
+
+  // Healthcheck — runs git/ssh/binary probes; null until first load.
+  const [healthChecks, setHealthChecks] = useState<HealthCheck[] | null>(null);
+  const [healthBusy, setHealthBusy] = useState(false);
 
   // CLAUDE.md deploy-section scan (pointer status lives in agentPointers)
   const [claudeMd, setClaudeMd] = useState<{
@@ -122,6 +322,21 @@ export default function ProjectSettings({
     } catch { setClaudeMd(null); }
   }, [projectName]);
 
+  const loadGitStatus = useCallback(async () => {
+    try {
+      setGitStatus(await api.get(`/api/sessions/${projectName}/git/status`));
+    } catch { setGitStatus(null); }
+  }, [projectName]);
+
+  const loadHealthChecks = useCallback(async () => {
+    setHealthBusy(true);
+    try {
+      const data = await api.get(`/api/sessions/${projectName}/healthcheck`);
+      setHealthChecks(data.checks || []);
+    } catch { setHealthChecks([]); }
+    setHealthBusy(false);
+  }, [projectName]);
+
   const loadAgentPointers = useCallback(async () => {
     try {
       const data = await api.get(`/api/sessions/${projectName}/agent-pointers`);
@@ -136,7 +351,9 @@ export default function ProjectSettings({
     loadChatSessions();
     loadClaudeMd();
     loadAgentPointers();
-  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers]);
+    loadGitStatus();
+    loadHealthChecks();
+  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers, loadGitStatus, loadHealthChecks]);
 
   const saveProject = async () => {
     setSaving(true);
@@ -151,8 +368,23 @@ export default function ProjectSettings({
         deploy_doc: deployDoc,
         test_doc: testDoc,
       });
+      await loadGitStatus();
+      loadHealthChecks();
     } catch { /* ignore */ }
     setSaving(false);
+  };
+
+  const cloneRepo = async () => {
+    setCloneBusy(true);
+    setCloneError("");
+    try {
+      await api.post(`/api/sessions/${projectName}/git/clone`, {});
+      await loadGitStatus();
+      loadHealthChecks();
+    } catch (e) {
+      setCloneError(e instanceof Error ? e.message : String(e));
+    }
+    setCloneBusy(false);
   };
 
   const syncComux = async () => {
@@ -405,14 +637,23 @@ export default function ProjectSettings({
           <h3>版本庫</h3>
           <div className="form-row">
             <label>URL</label>
-            <input type="url" placeholder="https://github.com/user/repo" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
+            <input type="url" placeholder="git@github.com:user/repo.git" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} />
           </div>
+          <RepoUrlHint url={repoUrl} />
           <div className="form-row">
             <label>Token (PAT)</label>
             <input type="password" placeholder={repoToken ? "••••••••" : "個人存取權杖"}
               value={repoToken === "***" ? "" : repoToken}
               onChange={(e) => setRepoToken(e.target.value)} />
           </div>
+          <GitStatusBlock
+            status={gitStatus}
+            cwd={cwd}
+            repoUrl={repoUrl}
+            cloneBusy={cloneBusy}
+            cloneError={cloneError}
+            onClone={cloneRepo}
+          />
         </section>
 
         {/* Save */}
@@ -425,6 +666,12 @@ export default function ProjectSettings({
             儲存會同步更新到 <code>.comux/project.md</code>，供 AI agent 讀取。
           </p>
         </div>
+
+        <HealthCheckSection
+          checks={healthChecks}
+          busy={healthBusy}
+          onRerun={loadHealthChecks}
+        />
 
         {/* Hosts */}
         <section className="settings-section">
