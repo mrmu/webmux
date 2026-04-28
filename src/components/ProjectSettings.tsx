@@ -258,8 +258,12 @@ export default function ProjectSettings({
   const [cwd, setCwd] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [repoToken, setRepoToken] = useState("");
-  const [deployDoc, setDeployDoc] = useState("");
-  const [testDoc, setTestDoc] = useState("");
+  // deploy.md / test.md are edited via the FileEditor (linked from this
+  // panel). We only track existence here so the link rows can show a hint.
+  const [docsExist, setDocsExist] = useState<{ deploy: boolean; test: boolean }>({
+    deploy: false,
+    test: false,
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
@@ -322,13 +326,16 @@ export default function ProjectSettings({
   }, [projectName]);
 
   // Docs (deploy.md / test.md) live as files under {cwd}/.comux/. Read
-  // and write directly via the docs API — DB doesn't mirror them.
+  // existence so the link rows can flag missing files; the editor is
+  // launched separately via onOpenFile.
   const loadDocs = useCallback(async () => {
     try {
       const data = await api.get(`/api/sessions/${projectName}/comux/docs`);
-      setDeployDoc(data.deploy || "");
-      setTestDoc(data.test || "");
-    } catch { /* missing cwd / file — leave empty */ }
+      setDocsExist({
+        deploy: typeof data.deploy === "string" && data.deploy.length > 0,
+        test: typeof data.test === "string" && data.test.length > 0,
+      });
+    } catch { setDocsExist({ deploy: false, test: false }); }
   }, [projectName]);
 
   const loadHosts = useCallback(async () => {
@@ -408,22 +415,6 @@ export default function ProjectSettings({
       setSaveError(humanizeSaveError(e instanceof Error ? e.message : String(e)));
     }
     setSaving(false);
-  };
-
-  const [savingDocs, setSavingDocs] = useState(false);
-  const [docsError, setDocsError] = useState("");
-  const saveDocs = async () => {
-    setSavingDocs(true);
-    setDocsError("");
-    try {
-      await api.put(`/api/sessions/${projectName}/comux/docs`, {
-        deploy: deployDoc,
-        test: testDoc,
-      });
-    } catch (e) {
-      setDocsError(e instanceof Error ? e.message : String(e));
-    }
-    setSavingDocs(false);
   };
 
   const cloneRepo = async () => {
@@ -595,7 +586,7 @@ export default function ProjectSettings({
   /** Build a structured analysis prompt for the Chat tab. Includes the
    *  current comux settings so the AI knows what's already in place and
    *  can point out conflicts vs. what's written in CLAUDE.md / docs. */
-  const buildAnalysisPrompt = (): string => {
+  const buildAnalysisPrompt = (deployDoc: string, testDoc: string): string => {
     const hostsList = hosts.length
       ? hosts
           .map(
@@ -647,7 +638,12 @@ export default function ProjectSettings({
    *  even after the JSONL session gets /clear'd. */
   const askAIForSuggestions = async () => {
     if (!onAskAI) return;
-    const prompt = buildAnalysisPrompt();
+    // Fetch the latest file content at click-time so the prompt reflects
+    // what the user is about to ask the AI to compare against.
+    let docs: { deploy?: string; test?: string } = {};
+    try { docs = await api.get(`/api/sessions/${projectName}/comux/docs`); }
+    catch { /* fine — fall through with empty */ }
+    const prompt = buildAnalysisPrompt(docs.deploy || "", docs.test || "");
     try {
       const note = await api.post(`/api/sessions/${projectName}/notes`, {
         content: prompt,
@@ -887,12 +883,43 @@ export default function ProjectSettings({
             </button>
           </h3>
           <p className="settings-hint">
-            <code>.comux/deploy.md</code> 與 <code>.comux/test.md</code> 是你的檔
-            — 編完按「儲存文件」會直接寫檔。DB 不再保存這兩個欄位，可以放心
-            <code>git commit</code>，team 都看到同一份。
+            點檔名用內建 editor 開檔；存檔即寫進 <code>.comux/</code> 並可
+            <code>git commit</code>。auto 檔（<code>README.md</code> /
+            <code>project.md</code> / <code>hosts.md</code>）由設定 render 出來，
+            按右上「重生 .comux/」可手動重生。
           </p>
+          {[
+            { file: "deploy.md", label: "部署步驟", exists: docsExist.deploy },
+            { file: "test.md", label: "測試清單", exists: docsExist.test },
+          ].map((row) => (
+            <div key={row.file} className="claudemd-status" style={{ marginBottom: "0.4rem" }}>
+              <span className="claudemd-icon">{row.exists ? "✅" : "○"}</span>
+              <span style={{ flex: 1 }}>
+                <strong>{row.label}</strong>
+                {" · "}
+                {onOpenFile ? (
+                  <a
+                    className="filename-link"
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      onOpenFile(`.comux/${row.file}`);
+                    }}
+                    title={row.exists ? "在編輯器開啟" : "在編輯器建立並編輯"}
+                  >
+                    <code>.comux/{row.file}</code>
+                  </a>
+                ) : (
+                  <code>.comux/{row.file}</code>
+                )}
+                <span className="settings-hint" style={{ marginLeft: "0.4rem" }}>
+                  {row.exists ? "已建立" : "尚未建立 — 點檔名建立"}
+                </span>
+              </span>
+            </div>
+          ))}
           {onAskAI && (
-            <div className="settings-analyze-box">
+            <div className="settings-analyze-box" style={{ marginTop: "0.5rem" }}>
               <button
                 onClick={askAIForSuggestions}
                 type="button"
@@ -902,48 +929,12 @@ export default function ProjectSettings({
                 請 AI 分析既有文件並建議整合
               </button>
               <p className="settings-hint" style={{ margin: "0.3rem 0 0" }}>
-                會用一段結構化 prompt 把目前的 Deploy steps / Test checklist / Hosts
-                發給 Chat tab 的 AI，請它讀 <code>CLAUDE.md</code>、<code>docs/</code>、
-                <code>scripts/</code> 等檔，針對每個欄位給建議。<strong>AI 不會動任何
-                設定</strong>，回覆是純文字——你看完再手動貼到下面欄位。
+                把目前的 deploy / test 檔內容 + Hosts 設定，連同 prompt 送到 Chat tab，請 AI
+                讀 <code>CLAUDE.md</code>、<code>docs/</code>、<code>scripts/</code> 後給建議。
+                <strong>AI 不會動任何設定</strong>，回覆是純文字 — 看完自己改檔。
               </p>
             </div>
           )}
-          <div className="form-row">
-            <label>部署步驟</label>
-            <textarea
-              value={deployDoc}
-              onChange={(e) => setDeployDoc(e.target.value)}
-              placeholder="# 部署步驟&#10;&#10;正式 / stage 指令、rollback、清 cache 等"
-              rows={6}
-              style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
-            />
-          </div>
-          <div className="form-row">
-            <label>測試清單</label>
-            <textarea
-              value={testDoc}
-              onChange={(e) => setTestDoc(e.target.value)}
-              placeholder="# 測試清單&#10;&#10;- [ ] smoke: GET /health&#10;- [ ] 登入流程&#10;- [ ] 每行一個 checklist 項目；agent 部署後會逐項走過才標綠燈"
-              rows={6}
-              style={{ fontFamily: "'SF Mono', monospace", fontSize: "0.85rem" }}
-            />
-          </div>
-          <div style={{ marginTop: "0.5rem" }}>
-            <button
-              className="btn-primary"
-              onClick={saveDocs}
-              disabled={savingDocs}
-              style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
-            >
-              {savingDocs ? "儲存中..." : "儲存文件"}
-            </button>
-            <p className="settings-hint" style={{ marginTop: "0.3rem" }}>
-              直接寫入 <code>.comux/deploy.md</code> / <code>test.md</code>。
-              不會動 git commit 或推任何地方 — 你想保留就照常 commit。
-            </p>
-            {docsError && <p className="pointer-error">{docsError}</p>}
-          </div>
         </section>
 
         {/* Agent Integration — pointers in CLAUDE.md, AGENTS.md, ... */}
