@@ -1445,13 +1445,16 @@ select {
 .project-tabs-scroll::-webkit-scrollbar { display: none; }
 
 .project-tab {
-  padding: 0.5rem 1rem; white-space: nowrap; flex-shrink: 0;
+  padding: 0.5rem 0.6rem 0.5rem 1rem; white-space: nowrap; flex-shrink: 0;
   border: none; background: transparent; color: var(--text-muted);
   font-size: 0.85rem; font-weight: 500; cursor: pointer;
   border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s;
+  display: inline-flex; align-items: center; gap: 0.4rem;
 }
 .project-tab:hover { color: var(--text-dim); }
 .project-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.project-tab .tab-close { opacity: 0.35; }
+.project-tab:hover .tab-close, .project-tab.active .tab-close { opacity: 0.7; }
 
 /* ─── Layer 2: View Tabs ─────────── */
 .view-tabs-bar {

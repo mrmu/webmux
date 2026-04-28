@@ -14,6 +14,24 @@ interface SessionInfo {
   name: string;
   display_name: string;
   color: string;
+  unmanaged?: boolean;
+}
+
+const OPEN_TABS_KEY = "comux:openProjectTabs";
+
+function loadOpenTabs(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(OPEN_TABS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch { return []; }
+}
+
+function persistOpenTabs(tabs: string[]) {
+  try { window.localStorage.setItem(OPEN_TABS_KEY, JSON.stringify(tabs)); }
+  catch { /* localStorage full / blocked — nothing we can do */ }
 }
 
 interface OpenFile {
@@ -33,6 +51,10 @@ function WorkspacePageContent({
 
   const [activeView, setActiveView] = useState<string>(initialTab);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  // Open project tabs — persisted per browser. Always includes the
+  // current project; closing a tab removes it from this list and
+  // navigates away if it was the active one.
+  const [openTabs, setOpenTabs] = useState<string[]>(loadOpenTabs);
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([]);
   const [showFiles, setShowFiles] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -61,6 +83,48 @@ function WorkspacePageContent({
     })();
     return () => { cancelled = true; };
   }, [projectName, router]);
+
+  // Make sure the current project is in the open-tabs list; once the
+  // sessions list has loaded, also drop any stale names (deleted
+  // projects, or renamed ones the user no longer owns). Pruning is
+  // gated on `sessions.length > 0` because an empty `sessions` means
+  // "still loading" — pruning then would wipe every other tab the
+  // user opened in a previous visit.
+  useEffect(() => {
+    setOpenTabs((prev) => {
+      let next = prev;
+      if (!next.includes(projectName)) next = [...next, projectName];
+      if (sessions.length > 0) {
+        const validNames = new Set(
+          sessions.filter((s) => !s.unmanaged).map((s) => s.name)
+        );
+        next = next.filter((n) => validNames.has(n) || n === projectName);
+      }
+      if (next.length === prev.length && next.every((n, i) => n === prev[i])) return prev;
+      persistOpenTabs(next);
+      return next;
+    });
+  }, [projectName, sessions]);
+
+  const closeProjectTab = useCallback(
+    (name: string) => {
+      setOpenTabs((prev) => {
+        const idx = prev.indexOf(name);
+        if (idx < 0) return prev;
+        const next = prev.filter((n) => n !== name);
+        persistOpenTabs(next);
+        if (name === projectName) {
+          // Navigate to the neighbouring tab (previous if available, else
+          // next, else back to the project list).
+          const fallback = next[idx] || next[idx - 1] || null;
+          if (fallback) router.push(`/projects/${fallback}`);
+          else router.push("/projects");
+        }
+        return next;
+      });
+    },
+    [projectName, router]
+  );
 
   // Sync tab to URL
   const switchView = useCallback((view: string) => {
@@ -122,16 +186,31 @@ function WorkspacePageContent({
           &larr;
         </button>
         <div className="project-tabs-scroll">
-          {sessions.map((p) => (
-            <button
-              key={p.name}
-              className={`project-tab${p.name === projectName ? " active" : ""}`}
-              style={p.name === projectName ? { borderBottomColor: p.color } : undefined}
-              onClick={() => p.name !== projectName && switchProject(p.name)}
-            >
-              {p.display_name}
-            </button>
-          ))}
+          {openTabs.map((tabName) => {
+            const p = sessions.find((s) => s.name === tabName);
+            // If sessions hasn't loaded yet, fall back to the bare name
+            // for the current tab so the bar isn't empty mid-load.
+            const display = p?.display_name || tabName;
+            const color = p?.color;
+            const isCurrent = tabName === projectName;
+            // Skip stale tabs that turned out to be unmanaged sessions.
+            if (p?.unmanaged) return null;
+            return (
+              <button
+                key={tabName}
+                className={`project-tab${isCurrent ? " active" : ""}`}
+                style={isCurrent && color ? { borderBottomColor: color } : undefined}
+                onClick={() => !isCurrent && switchProject(tabName)}
+              >
+                <span>{display}</span>
+                <span
+                  className="tab-close"
+                  title="關閉專案分頁（不會結束 tmux session 也不刪除專案）"
+                  onClick={(e) => { e.stopPropagation(); closeProjectTab(tabName); }}
+                >&times;</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
