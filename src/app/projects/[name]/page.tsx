@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect, useCallback, use } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import ChatView from "@/components/ChatView";
@@ -71,8 +71,17 @@ function WorkspacePageContent({
   // chat view will use. null until the user clicks a launch button.
   const [agent, setAgent] = useState<string | null>(null);
 
+  // Track which project we last loaded so we can tell "first mount" apart
+  // from "user switched tabs". On a switch we override activeView to the
+  // destination's preferred default (chat if it has an agent, else
+  // terminal); on first mount we leave the URL's ?tab= intact.
+  const prevProjectName = useRef<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
+    const isSwitch =
+      prevProjectName.current !== null && prevProjectName.current !== projectName;
+    prevProjectName.current = projectName;
     (async () => {
       let proj: { agent?: string | null } | null = null;
       try {
@@ -83,7 +92,13 @@ function WorkspacePageContent({
       }
       if (cancelled) return;
       setProjectReady(true);
-      setAgent(proj?.agent || null);
+      const newAgent = proj?.agent || null;
+      setAgent(newAgent);
+      if (isSwitch) {
+        const target = newAgent ? "chat" : "terminal";
+        setActiveView(target);
+        router.replace(`/projects/${projectName}?tab=${target}`, { scroll: false });
+      }
       try { setSessions(await api.get("/api/sessions")); } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
