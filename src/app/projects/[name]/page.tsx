@@ -14,7 +14,6 @@ interface SessionInfo {
   name: string;
   display_name: string;
   color: string;
-  unmanaged?: boolean;
 }
 
 const OPEN_TABS_KEY = "comux:openProjectTabs";
@@ -95,9 +94,7 @@ function WorkspacePageContent({
       let next = prev;
       if (!next.includes(projectName)) next = [...next, projectName];
       if (sessions.length > 0) {
-        const validNames = new Set(
-          sessions.filter((s) => !s.unmanaged).map((s) => s.name)
-        );
+        const validNames = new Set(sessions.map((s) => s.name));
         next = next.filter((n) => validNames.has(n) || n === projectName);
       }
       if (next.length === prev.length && next.every((n, i) => n === prev[i])) return prev;
@@ -193,8 +190,6 @@ function WorkspacePageContent({
             const display = p?.display_name || tabName;
             const color = p?.color;
             const isCurrent = tabName === projectName;
-            // Skip stale tabs that turned out to be unmanaged sessions.
-            if (p?.unmanaged) return null;
             return (
               <button
                 key={tabName}

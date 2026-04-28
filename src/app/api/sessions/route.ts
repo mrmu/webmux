@@ -16,7 +16,10 @@ export async function GET(request: NextRequest) {
   // Get all projects from DB
   const projects = await prisma.project.findMany({ include: { hosts: true } });
 
-  // Merge: show live sessions with DB metadata, plus DB-only projects as "stopped"
+  // Each project's live tmux state is overlaid (running flag, dimensions,
+  // activity). tmux sessions without a matching DB project are NOT
+  // surfaced here — comux is a project manager, not a tmux process
+  // viewer; those rogue sessions belong on the host, not in the UI.
   const result = projects.map((p) => {
     const live = liveSessions.find((s) => s.name === p.name);
     return {
@@ -34,7 +37,6 @@ export async function GET(request: NextRequest) {
       height: live?.height || 0,
       activity: live?.activity || "",
       running: liveNames.has(p.name),
-      unmanaged: false,
       hosts: p.hosts.map((h) => ({
         id: h.id,
         name: h.name,
@@ -44,30 +46,6 @@ export async function GET(request: NextRequest) {
       })),
     };
   });
-
-  // Also include tmux sessions that have no DB entry
-  for (const s of liveSessions) {
-    if (!projects.find((p) => p.name === s.name)) {
-      result.push({
-        name: s.name,
-        display_name: s.name,
-        description: "",
-        color: "#6366f1",
-        cwd: "",
-        command: "",
-        repo_url: "",
-        repo_token: "",
-        created: s.created,
-        attached: s.attached,
-        width: s.width,
-        height: s.height,
-        activity: s.activity,
-        running: true,
-        unmanaged: true,
-        hosts: [],
-      });
-    }
-  }
 
   return NextResponse.json(result);
 }
