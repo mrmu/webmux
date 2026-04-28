@@ -317,10 +317,18 @@ export default function ProjectSettings({
         setRepoUrl(p.repo_url || "");
         // Don't overwrite token placeholder — only set if empty
         if (!p.repo_token) setRepoToken("");
-        setDeployDoc(p.deploy_doc || "");
-        setTestDoc(p.test_doc || "");
       }
     } catch { /* ignore */ }
+  }, [projectName]);
+
+  // Docs (deploy.md / test.md) live as files under {cwd}/.comux/. Read
+  // and write directly via the docs API — DB doesn't mirror them.
+  const loadDocs = useCallback(async () => {
+    try {
+      const data = await api.get(`/api/sessions/${projectName}/comux/docs`);
+      setDeployDoc(data.deploy || "");
+      setTestDoc(data.test || "");
+    } catch { /* missing cwd / file — leave empty */ }
   }, [projectName]);
 
   const loadHosts = useCallback(async () => {
@@ -373,13 +381,14 @@ export default function ProjectSettings({
 
   useEffect(() => {
     loadProject();
+    loadDocs();
     loadHosts();
     loadChatSessions();
     loadClaudeMd();
     loadAgentPointers();
     loadGitStatus();
     loadHealthChecks();
-  }, [loadProject, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers, loadGitStatus, loadHealthChecks]);
+  }, [loadProject, loadDocs, loadHosts, loadChatSessions, loadClaudeMd, loadAgentPointers, loadGitStatus, loadHealthChecks]);
 
   const saveProject = async () => {
     setSaving(true);
@@ -392,8 +401,6 @@ export default function ProjectSettings({
         repo_url: repoUrl,
         // Only send token if user typed a new one (not the masked "***")
         ...(repoToken && repoToken !== "***" && { repo_token: repoToken }),
-        deploy_doc: deployDoc,
-        test_doc: testDoc,
       });
       await loadGitStatus();
       loadHealthChecks();
@@ -401,6 +408,22 @@ export default function ProjectSettings({
       setSaveError(humanizeSaveError(e instanceof Error ? e.message : String(e)));
     }
     setSaving(false);
+  };
+
+  const [savingDocs, setSavingDocs] = useState(false);
+  const [docsError, setDocsError] = useState("");
+  const saveDocs = async () => {
+    setSavingDocs(true);
+    setDocsError("");
+    try {
+      await api.put(`/api/sessions/${projectName}/comux/docs`, {
+        deploy: deployDoc,
+        test: testDoc,
+      });
+    } catch (e) {
+      setDocsError(e instanceof Error ? e.message : String(e));
+    }
+    setSavingDocs(false);
   };
 
   const cloneRepo = async () => {
@@ -416,20 +439,14 @@ export default function ProjectSettings({
     setCloneBusy(false);
   };
 
-  const [syncMsg, setSyncMsg] = useState("");
   const syncComux = async () => {
     setSyncBusy(true);
-    setSyncMsg("");
     try {
-      const res = await api.post(`/api/sessions/${projectName}/comux/sync`, {});
-      const imported = res?.imported as { deployImported?: boolean; testImported?: boolean } | undefined;
-      const parts: string[] = [];
-      if (imported?.deployImported) parts.push("deploy.md → DB");
-      if (imported?.testImported) parts.push("test.md → DB");
-      setSyncMsg(parts.length ? `已匯入：${parts.join("、")}` : "檔案與 DB 已一致，僅重生 .comux/");
+      await api.post(`/api/sessions/${projectName}/comux/sync`, {});
       await loadProject();
+      await loadDocs();
       await loadClaudeMd();
-    } catch { setSyncMsg("同步失敗"); }
+    } catch { /* ignore */ }
     setSyncBusy(false);
   };
 
@@ -864,21 +881,15 @@ export default function ProjectSettings({
                 color: "var(--text-muted)",
                 cursor: "pointer",
               }}
-              title="先把 deploy.md / test.md 的編輯拉回 DB，再用 DB 重新生成所有 .comux/ 檔"
+              title="重新生成 README.md / project.md / hosts.md（auto 檔）。不會動 deploy.md / test.md，那兩個是你的檔。"
             >
-              {syncBusy ? "同步中..." : "同步 .comux/"}
+              {syncBusy ? "重生中..." : "重生 .comux/"}
             </button>
-            {syncMsg && (
-              <span className="settings-hint" style={{ marginLeft: "0.5rem" }}>
-                {syncMsg}
-              </span>
-            )}
           </h3>
           <p className="settings-hint">
-            下方內容會寫入 <code>.comux/deploy.md</code> 與 <code>.comux/test.md</code>。
-            DB 是真實來源；按「同步 .comux/」會先把檔案中比 DB 新的內容拉回 DB
-            （像 AI agent 直接編了檔），再用 DB 重生所有檔。空 checkbox / 註解 / 標題
-            視為樣板，不會被當成真實內容匯入。
+            <code>.comux/deploy.md</code> 與 <code>.comux/test.md</code> 是你的檔
+            — 編完按「儲存文件」會直接寫檔。DB 不再保存這兩個欄位，可以放心
+            <code>git commit</code>，team 都看到同一份。
           </p>
           {onAskAI && (
             <div className="settings-analyze-box">
@@ -921,16 +932,17 @@ export default function ProjectSettings({
           <div style={{ marginTop: "0.5rem" }}>
             <button
               className="btn-primary"
-              onClick={saveProject}
-              disabled={saving}
+              onClick={saveDocs}
+              disabled={savingDocs}
               style={{ padding: "0.4rem 1rem", fontSize: "0.85rem" }}
             >
-              {saving ? "儲存中..." : "儲存文件"}
+              {savingDocs ? "儲存中..." : "儲存文件"}
             </button>
             <p className="settings-hint" style={{ marginTop: "0.3rem" }}>
-              儲存會：寫入 DB → 立刻重新生成 <code>.comux/deploy.md</code> / <code>test.md</code>，
-              agent 下次讀就是新內容。不會動 git commit 或推任何地方。
+              直接寫入 <code>.comux/deploy.md</code> / <code>test.md</code>。
+              不會動 git commit 或推任何地方 — 你想保留就照常 commit。
             </p>
+            {docsError && <p className="pointer-error">{docsError}</p>}
           </div>
         </section>
 

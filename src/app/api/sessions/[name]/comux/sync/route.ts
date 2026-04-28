@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
-import { syncComuxDir, importComuxDocsFromFile } from "@/lib/sync-comux-dir";
+import { syncComuxDir } from "@/lib/sync-comux-dir";
 
-/** Manual re-sync of `.comux/`. Order matters:
- *   1. Pull deploy.md / test.md edits back into the DB (file may hold
- *      changes a sub-agent or external editor made).
- *   2. Regenerate auto files + write DB-canonical deploy.md / test.md.
- *  This way a user clicking "同步 .comux/" after editing the file sees
- *  their edits land in the DB, not get overwritten by stale DB content. */
+/** Regenerate auto files (README.md / project.md / hosts.md) from DB.
+ *  deploy.md / test.md are user-owned and not touched — edit them via
+ *  /api/sessions/[name]/comux/docs (or directly on disk). */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ name: string }> }
@@ -16,7 +13,6 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { name } = await params;
-  const imported = await importComuxDocsFromFile(name);
   await syncComuxDir(name);
-  return NextResponse.json({ ok: true, imported });
+  return NextResponse.json({ ok: true });
 }

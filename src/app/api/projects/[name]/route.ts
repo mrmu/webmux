@@ -65,8 +65,6 @@ export async function PUT(
       ...(body.command !== undefined && { command: body.command }),
       ...(body.repo_url !== undefined && { repoUrl: body.repo_url }),
       ...(body.repo_token !== undefined && { repoToken: body.repo_token }),
-      ...(body.deploy_doc !== undefined && { deployDoc: body.deploy_doc }),
-      ...(body.test_doc !== undefined && { testDoc: body.test_doc }),
     },
     create: {
       name,
@@ -77,8 +75,6 @@ export async function PUT(
       command: body.command || "",
       repoUrl: body.repo_url || "",
       repoToken: body.repo_token || "",
-      deployDoc: body.deploy_doc || "",
-      testDoc: body.test_doc || "",
     },
   });
 

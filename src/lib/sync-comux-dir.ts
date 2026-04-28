@@ -4,15 +4,15 @@ import { prisma } from "./db";
 import { getSetting } from "./settings";
 
 /**
- * Sync project metadata from DB to `{cwd}/.comux/` so AI agents (Claude Code,
- * Codex, Cursor, …) can pick up project context in a vendor-neutral location.
+ * Sync auto-generated metadata from DB into `{cwd}/.comux/` so AI agents
+ * (Claude Code, Codex, Cursor, …) can pick up project context in a
+ * vendor-neutral location.
  *
- * Direction: DB → file. Auto files (README/project/hosts) are always
- * regenerated from DB. User files (deploy.md/test.md) are also regenerated
- * here, but the inverse pull (file → DB) lives in `importComuxDocsFromFile`
- * — call that first when the file may hold edits the DB doesn't know about
- * (e.g. an AI agent edited deploy.md directly, or the user opened the file
- * in their editor).
+ * Auto files (README.md / project.md / hosts.md) are regenerated from DB.
+ * User files (deploy.md / test.md) are NOT touched here — they live as
+ * source-of-truth files on disk, edited directly or via the docs API
+ * (`/api/sessions/[name]/comux/docs`). On a fresh project we seed empty
+ * scaffolding so the user has something to fill in.
  *
  * Also cleans up the legacy `.claude/comux-hosts.md` from when comux wrote
  * into Claude Code's own namespace.
@@ -155,85 +155,48 @@ export async function syncComuxDir(projectName: string): Promise<void> {
   }
   writeAuto(path.join(dir, "hosts.md"), hostLines.join("\n"));
 
-  // deploy.md / test.md — write DB to file. Caller is responsible for
-  // calling importComuxDocsFromFile first if file edits should be pulled
-  // into DB before this regen.
-  const deployPath = path.join(dir, "deploy.md");
-  const testPath = path.join(dir, "test.md");
-  writeAuto(deployPath, project.deployDoc || DEPLOY_PLACEHOLDER);
-  writeAuto(testPath, project.testDoc || TEST_PLACEHOLDER);
+  // deploy.md / test.md are user-owned files. comux does NOT touch them
+  // here — they're read/written via /api/sessions/[name]/comux/docs.
+  // Seed empty scaffolding only if neither exists, so a fresh project
+  // has something to fill in.
+  seedDocIfMissing(path.join(dir, "deploy.md"), DEPLOY_TEMPLATE);
+  seedDocIfMissing(path.join(dir, "test.md"), TEST_TEMPLATE);
 }
 
-/**
- * Pull `.comux/deploy.md` and `.comux/test.md` content back into the DB
- * when the file has meaningful content the DB doesn't match. Use cases:
- *  - AI agent edited the file directly (Claude Code etc.)
- *  - User opened the file in an editor outside comux
- *  - Project existed before comux managed it and has hand-written docs
- *
- * Skips when:
- *  - File doesn't exist or is empty
- *  - File matches the placeholder (no real content)
- *  - File already matches DB (no-op)
- *
- * Returns which fields were imported so the caller can show feedback.
- */
-export async function importComuxDocsFromFile(projectName: string): Promise<{
-  deployImported: boolean;
-  testImported: boolean;
-}> {
-  const project = await prisma.project
-    .findUnique({ where: { name: projectName } })
-    .catch(() => null);
-  if (!project?.cwd) return { deployImported: false, testImported: false };
+const DEPLOY_TEMPLATE = `# Deployment
 
-  const dir = path.join(project.cwd, ".comux");
-  const deployFile = tryReadFile(path.join(dir, "deploy.md"));
-  const testFile = tryReadFile(path.join(dir, "test.md"));
+<!--
+  Edit this file directly, or via comux → Settings → 部署步驟.
+  comux will not overwrite this file.
+-->
 
-  // A file may look "non-empty" (has headings, HTML hints, empty `- [ ]`
-  // checkboxes from a scaffolding template) without holding any real
-  // user content. Strip those out and check whether anything substantive
-  // remains — otherwise we'd import boilerplate over a real DB value.
-  const stripScaffolding = (s: string) =>
-    s
-      .replace(/<!--[\s\S]*?-->/g, "")          // HTML comments
-      .replace(/^\s*#+\s.*$/gm, "")             // markdown headings
-      .replace(/^\s*-\s*\[\s*\]\s*$/gm, "")     // empty checkbox bullets
-      .replace(/^_[^_\n]*_\s*$/gm, "")          // italic placeholder lines
-      .trim();
-  const hasRealContent = (s: string) => stripScaffolding(s).length > 0;
+## Steps
 
-  const nextDeploy =
-    hasRealContent(deployFile) && deployFile !== project.deployDoc
-      ? deployFile
-      : project.deployDoc;
-  const nextTest =
-    hasRealContent(testFile) && testFile !== project.testDoc
-      ? testFile
-      : project.testDoc;
+- [ ]
+`;
 
-  const deployImported = nextDeploy !== project.deployDoc;
-  const testImported = nextTest !== project.testDoc;
+const TEST_TEMPLATE = `# Test & Verification
 
-  if (deployImported || testImported) {
-    await prisma.project
-      .update({
-        where: { name: projectName },
-        data: { deployDoc: nextDeploy, testDoc: nextTest },
-      })
-      .catch(() => {
-        /* ignore — caller can retry */
-      });
-  }
+<!--
+  Edit this file directly, or via comux → Settings → 測試清單.
+  comux will not overwrite this file.
+-->
 
-  return { deployImported, testImported };
+## Before deploying
+
+- [ ]
+
+## After deploying
+
+- [ ]
+`;
+
+function seedDocIfMissing(filePath: string, content: string): void {
+  try { fs.statSync(filePath); return; }
+  catch { /* file missing — seed it */ }
+  try { fs.writeFileSync(filePath, content, "utf-8"); }
+  catch { /* ignore — user can create it later */ }
 }
-
-const DEPLOY_PLACEHOLDER =
-  "# Deployment\n\n_Not yet documented — edit via comux → Settings → Deploy docs._\n";
-const TEST_PLACEHOLDER =
-  "# Test & Verification\n\n_Not yet documented — edit via comux → Settings → Test docs._\n";
 
 function writeAuto(filePath: string, content: string): void {
   try {
@@ -245,11 +208,6 @@ function writeAuto(filePath: string, content: string): void {
   } catch { /* no existing file — fall through to write */ }
   try { fs.writeFileSync(filePath, content, "utf-8"); }
   catch { /* ignore */ }
-}
-
-function tryReadFile(filePath: string): string {
-  try { return fs.readFileSync(filePath, "utf-8"); }
-  catch { return ""; }
 }
 
 /** Single source of truth for what "has a comux pointer" means in any agent file. */
