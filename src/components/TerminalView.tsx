@@ -9,11 +9,43 @@ interface TmuxWindow {
   active: boolean;
 }
 
+interface AgentSpec {
+  id: "claude" | "codex" | "gemini";
+  label: string;
+  available: boolean;
+  comingSoonHint?: string;
+}
+
+const AGENTS: AgentSpec[] = [
+  { id: "claude", label: "Claude Code", available: true },
+  { id: "codex",  label: "OpenAI Codex", available: false, comingSoonHint: "transcript adapter 規劃中" },
+  { id: "gemini", label: "Gemini CLI",   available: false, comingSoonHint: "transcript adapter 規劃中" },
+];
+
 export default function TerminalView({
   sessionName,
+  agent,
+  onAgentLaunched,
 }: {
   sessionName: string;
+  agent: string | null;
+  onAgentLaunched: (agent: string) => void;
 }) {
+  const [launching, setLaunching] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState("");
+
+  const launchAgent = async (id: AgentSpec["id"]) => {
+    setLaunching(id);
+    setLaunchError("");
+    try {
+      await api.post(`/api/sessions/${sessionName}/launch-agent`, { agent: id });
+      onAgentLaunched(id);
+    } catch (e) {
+      setLaunchError(e instanceof Error ? e.message : String(e));
+    }
+    setLaunching(null);
+  };
+
   const [windows, setWindows] = useState<TmuxWindow[]>([]);
   const [activeWindow, setActiveWindow] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -263,7 +295,7 @@ export default function TerminalView({
               onClick={() => setActiveWindow(w.index)}
             >
               <span className="terminal-window-name">
-                {w.index === 0 ? "claude" : w.name}
+                {w.index === 0 ? (agent || "main") : w.name}
               </span>
               {w.index !== 0 && (
                 <span
@@ -289,20 +321,38 @@ export default function TerminalView({
         <div className="terminal-container" ref={containerRef} />
       </div>
       <div className="terminal-bar">
-        <button
-          className="terminal-claude-btn"
-          onClick={() => {
-            api.post(`/api/sessions/${sessionName}/send`, {
-              text: "claude --dangerously-skip-permissions",
-            }).catch(() => {});
-          }}
-        >
-          ▶ Claude Code
-        </button>
-        <span className="terminal-focus-hint">
-          Tap terminal to type
-        </span>
+        {agent ? (
+          <span className="terminal-agent-status">
+            目前 agent：<strong>{AGENTS.find((a) => a.id === agent)?.label || agent}</strong>
+            <button
+              className="terminal-agent-relaunch"
+              title="重新啟動 agent CLI"
+              onClick={() => launchAgent(agent as AgentSpec["id"])}
+              disabled={launching !== null}
+            >
+              {launching ? "重啟中..." : "重啟"}
+            </button>
+          </span>
+        ) : (
+          <span className="terminal-agent-launchers">
+            啟用 AI agent：
+            {AGENTS.map((a) => (
+              <button
+                key={a.id}
+                className={`terminal-agent-btn${a.available ? "" : " disabled"}`}
+                disabled={!a.available || launching !== null}
+                title={a.available ? `啟動 ${a.label}` : a.comingSoonHint}
+                onClick={() => a.available && launchAgent(a.id)}
+              >
+                {launching === a.id ? "啟動中..." : `▶ ${a.label}`}
+                {!a.available && <span className="badge-soon">soon</span>}
+              </button>
+            ))}
+          </span>
+        )}
+        <span className="terminal-focus-hint">Tap terminal to type</span>
       </div>
+      {launchError && <div className="terminal-launch-error">{launchError}</div>}
     </div>
   );
 }

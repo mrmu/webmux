@@ -66,22 +66,34 @@ function WorkspacePageContent({
   // auto-create a stray Project row for any name typed into the URL
   // (stale bookmarks, old cache, etc.).
   const [projectReady, setProjectReady] = useState<boolean>(false);
+  // Which AI agent is currently launched in this project (claude / codex /
+  // gemini). Drives Chat-tab visibility and which transcript adapter the
+  // chat view will use. null until the user clicks a launch button.
+  const [agent, setAgent] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      let proj: { agent?: string | null } | null = null;
       try {
-        await api.get(`/api/projects/${projectName}`);
+        proj = await api.get(`/api/projects/${projectName}`);
       } catch {
         if (!cancelled) router.replace("/projects");
         return;
       }
       if (cancelled) return;
       setProjectReady(true);
+      setAgent(proj?.agent || null);
       try { setSessions(await api.get("/api/sessions")); } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
   }, [projectName, router]);
+
+  // Force Chat → Terminal when the project has no agent yet, so the
+  // initialTab="chat" default doesn't land on a hidden tab.
+  useEffect(() => {
+    if (!agent && activeView === "chat") setActiveView("terminal");
+  }, [agent, activeView]);
 
   // Make sure the current project is in the open-tabs list; once the
   // sessions list has loaded, also drop any stale names (deleted
@@ -212,8 +224,10 @@ function WorkspacePageContent({
       {/* Layer 2: View Tabs */}
       <div className="view-tabs-bar">
         <div className="view-tabs-scroll">
-          <button className={`view-tab${activeView === "chat" ? " active" : ""}`}
-            onClick={() => { closeAllPanels(); switchView("chat"); }}>Chat</button>
+          {agent && (
+            <button className={`view-tab${activeView === "chat" ? " active" : ""}`}
+              onClick={() => { closeAllPanels(); switchView("chat"); }}>Chat</button>
+          )}
           <button className={`view-tab${activeView === "terminal" ? " active" : ""}`}
             onClick={() => { closeAllPanels(); switchView("terminal"); }}>Terminal</button>
           {openFiles.map((f) => {
@@ -260,11 +274,18 @@ function WorkspacePageContent({
 
       {/* Content Area */}
       <div className="workspace-content">
-        <div style={{ display: activeView === "chat" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
-          <ChatView key={projectName} sessionName={projectName} prefill={chatPrefill} />
-        </div>
+        {agent && (
+          <div style={{ display: activeView === "chat" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
+            <ChatView key={projectName} sessionName={projectName} prefill={chatPrefill} />
+          </div>
+        )}
         <div style={{ display: activeView === "terminal" ? "flex" : "none", flex: 1, flexDirection: "column", overflow: "hidden" }}>
-          <TerminalView key={projectName} sessionName={projectName} />
+          <TerminalView
+            key={projectName}
+            sessionName={projectName}
+            agent={agent}
+            onAgentLaunched={(a) => { setAgent(a); switchView("chat"); }}
+          />
         </div>
 
         {openFiles.map((f) => {

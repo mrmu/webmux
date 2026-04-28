@@ -32,6 +32,7 @@ export default function NewSessionModal({
   }, []);
   const [command, setCommand] = useState("");
   const [color, setColor] = useState(COLORS[0]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -92,15 +93,27 @@ export default function NewSessionModal({
               }}
             />
           </label>
-          <label>
-            Start Command (optional)
-            <input
-              type="text"
-              placeholder="claude"
-              value={command}
-              onChange={(e) => setCommand(e.target.value)}
-            />
-          </label>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            style={{
+              border: "none", background: "transparent", color: "var(--text-muted)",
+              fontSize: "0.78rem", padding: "0.25rem 0", cursor: "pointer", textAlign: "left",
+            }}
+          >
+            {showAdvanced ? "▾" : "▸"} 進階設定
+          </button>
+          {showAdvanced && (
+            <label>
+              Start Command (optional)
+              <input
+                type="text"
+                placeholder="一般情況留空 — 之後在 Terminal 用「啟用 AI agent」按鈕"
+                value={command}
+                onChange={(e) => setCommand(e.target.value)}
+              />
+            </label>
+          )}
           <label>
             Color
             <div className="color-picker">

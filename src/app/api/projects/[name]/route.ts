@@ -15,7 +15,7 @@ export async function GET(
   const { name } = await params;
   const project = await prisma.project.findUnique({
     where: { name },
-    select: { name: true, displayName: true, color: true, cwd: true },
+    select: { name: true, displayName: true, color: true, cwd: true, agent: true },
   });
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -25,6 +25,7 @@ export async function GET(
     display_name: project.displayName,
     color: project.color,
     cwd: project.cwd,
+    agent: project.agent,
   });
 }
 
