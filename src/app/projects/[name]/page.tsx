@@ -105,10 +105,12 @@ function WorkspacePageContent({
   }, [projectName, router]);
 
   // Force Chat → Terminal when the project has no agent yet, so the
-  // initialTab="chat" default doesn't land on a hidden tab.
+  // initialTab="chat" default doesn't land on a hidden tab. Gated on
+  // projectReady so the *initial* null-agent state during the first
+  // fetch doesn't prematurely flip a chat-default project to terminal.
   useEffect(() => {
-    if (!agent && activeView === "chat") setActiveView("terminal");
-  }, [agent, activeView]);
+    if (projectReady && !agent && activeView === "chat") setActiveView("terminal");
+  }, [projectReady, agent, activeView]);
 
   // Make sure the current project is in the open-tabs list; once the
   // sessions list has loaded, also drop any stale names (deleted
