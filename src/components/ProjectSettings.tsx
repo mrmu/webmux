@@ -73,11 +73,20 @@ function HealthCheckSection({
   checks,
   busy,
   onRerun,
+  canClone,
+  cloneBusy,
+  onClone,
 }: {
   checks: HealthCheck[] | null;
   busy: boolean;
   onRerun: () => void;
+  canClone: boolean;
+  cloneBusy: boolean;
+  onClone: () => void;
 }) {
+  // The two checks that "Clone" can resolve directly. Showing the button
+  // here saves the user from scrolling back up to 版本庫.
+  const cloneFixesIds = new Set(["cwd-exists", "is-git-repo"]);
   const failing = checks?.filter((c) => c.ok === false).length ?? 0;
   const passing = checks?.filter((c) => c.ok === true).length ?? 0;
   const skipped = checks?.filter((c) => c.ok === null).length ?? 0;
@@ -139,7 +148,23 @@ function HealthCheckSection({
                   </span>
                 </div>
                 {c.ok === false && c.hint && (
-                  <p className="pointer-error" style={{ marginLeft: "1.5rem" }}>{c.hint}</p>
+                  <p className="pointer-error" style={{ marginLeft: "1.5rem" }}>
+                    {c.hint}
+                    {canClone && cloneFixesIds.has(c.id) && (
+                      <button
+                        onClick={onClone}
+                        disabled={cloneBusy}
+                        className="btn-primary"
+                        style={{
+                          marginLeft: "0.6rem",
+                          padding: "0.15rem 0.6rem",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {cloneBusy ? "Clone 中..." : "Clone"}
+                      </button>
+                    )}
+                  </p>
                 )}
               </div>
             ))}
@@ -391,13 +416,20 @@ export default function ProjectSettings({
     setCloneBusy(false);
   };
 
+  const [syncMsg, setSyncMsg] = useState("");
   const syncComux = async () => {
     setSyncBusy(true);
+    setSyncMsg("");
     try {
-      await api.post(`/api/sessions/${projectName}/comux/sync`, {});
+      const res = await api.post(`/api/sessions/${projectName}/comux/sync`, {});
+      const imported = res?.imported as { deployImported?: boolean; testImported?: boolean } | undefined;
+      const parts: string[] = [];
+      if (imported?.deployImported) parts.push("deploy.md → DB");
+      if (imported?.testImported) parts.push("test.md → DB");
+      setSyncMsg(parts.length ? `已匯入：${parts.join("、")}` : "檔案與 DB 已一致，僅重生 .comux/");
       await loadProject();
       await loadClaudeMd();
-    } catch { /* ignore */ }
+    } catch { setSyncMsg("同步失敗"); }
     setSyncBusy(false);
   };
 
@@ -690,6 +722,14 @@ export default function ProjectSettings({
           checks={healthChecks}
           busy={healthBusy}
           onRerun={loadHealthChecks}
+          canClone={
+            !!repoUrl &&
+            !!gitStatus &&
+            !gitStatus.isGitRepo &&
+            (gitStatus.isEmpty || !gitStatus.cwdExists)
+          }
+          cloneBusy={cloneBusy}
+          onClone={cloneRepo}
         />
 
         {/* Hosts */}
@@ -824,15 +864,21 @@ export default function ProjectSettings({
                 color: "var(--text-muted)",
                 cursor: "pointer",
               }}
-              title="依 DB 內容重新生成 .comux/ 下所有檔案"
+              title="先把 deploy.md / test.md 的編輯拉回 DB，再用 DB 重新生成所有 .comux/ 檔"
             >
               {syncBusy ? "同步中..." : "同步 .comux/"}
             </button>
+            {syncMsg && (
+              <span className="settings-hint" style={{ marginLeft: "0.5rem" }}>
+                {syncMsg}
+              </span>
+            )}
           </h3>
           <p className="settings-hint">
             下方內容會寫入 <code>.comux/deploy.md</code> 與 <code>.comux/test.md</code>。
-            DB 才是真實來源，檔案每次儲存會重新生成。按「同步 .comux/」只是手動重跑一次，
-            不會改動任何 DB 內容；用在現有檔案被刪或想確認重生。
+            DB 是真實來源；按「同步 .comux/」會先把檔案中比 DB 新的內容拉回 DB
+            （像 AI agent 直接編了檔），再用 DB 重生所有檔。空 checkbox / 註解 / 標題
+            視為樣板，不會被當成真實內容匯入。
           </p>
           {onAskAI && (
             <div className="settings-analyze-box">

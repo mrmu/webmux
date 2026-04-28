@@ -7,17 +7,12 @@ import { getSetting } from "./settings";
  * Sync project metadata from DB to `{cwd}/.comux/` so AI agents (Claude Code,
  * Codex, Cursor, …) can pick up project context in a vendor-neutral location.
  *
- * DB is source of truth. Every file in `.comux/` maps to a column:
- *  - README.md   derived from code (static boilerplate)
- *  - project.md  derived from Project row (name, cwd, deployment status)
- *  - hosts.md    derived from Host rows
- *  - deploy.md   Project.deployDoc
- *  - test.md     Project.testDoc
- *
- * Migration: the first sync after this refactor will find existing deploy.md /
- * test.md files (left by the previous "seed once, never overwrite" version)
- * and import their content into the DB columns if those columns are empty.
- * After that, files are regenerated from DB on every sync.
+ * Direction: DB → file. Auto files (README/project/hosts) are always
+ * regenerated from DB. User files (deploy.md/test.md) are also regenerated
+ * here, but the inverse pull (file → DB) lives in `importComuxDocsFromFile`
+ * — call that first when the file may hold edits the DB doesn't know about
+ * (e.g. an AI agent edited deploy.md directly, or the user opened the file
+ * in their editor).
  *
  * Also cleans up the legacy `.claude/comux-hosts.md` from when comux wrote
  * into Claude Code's own namespace.
@@ -160,31 +155,79 @@ export async function syncComuxDir(projectName: string): Promise<void> {
   }
   writeAuto(path.join(dir, "hosts.md"), hostLines.join("\n"));
 
-  // deploy.md / test.md — DB is source of truth. If DB is empty but a file
-  // exists (e.g. from the previous "seed once" version), import the file
-  // content into DB so we don't lose hand-edits during this migration.
+  // deploy.md / test.md — write DB to file. Caller is responsible for
+  // calling importComuxDocsFromFile first if file edits should be pulled
+  // into DB before this regen.
   const deployPath = path.join(dir, "deploy.md");
   const testPath = path.join(dir, "test.md");
-  let deployDoc = project.deployDoc;
-  let testDoc = project.testDoc;
+  writeAuto(deployPath, project.deployDoc || DEPLOY_PLACEHOLDER);
+  writeAuto(testPath, project.testDoc || TEST_PLACEHOLDER);
+}
 
-  if (!deployDoc) {
-    const imported = tryReadFile(deployPath);
-    if (imported.trim()) deployDoc = imported;
-  }
-  if (!testDoc) {
-    const imported = tryReadFile(testPath);
-    if (imported.trim()) testDoc = imported;
-  }
-  if (deployDoc !== project.deployDoc || testDoc !== project.testDoc) {
-    await prisma.project.update({
-      where: { name: projectName },
-      data: { deployDoc, testDoc },
-    }).catch(() => { /* ignore — next sync will retry */ });
+/**
+ * Pull `.comux/deploy.md` and `.comux/test.md` content back into the DB
+ * when the file has meaningful content the DB doesn't match. Use cases:
+ *  - AI agent edited the file directly (Claude Code etc.)
+ *  - User opened the file in an editor outside comux
+ *  - Project existed before comux managed it and has hand-written docs
+ *
+ * Skips when:
+ *  - File doesn't exist or is empty
+ *  - File matches the placeholder (no real content)
+ *  - File already matches DB (no-op)
+ *
+ * Returns which fields were imported so the caller can show feedback.
+ */
+export async function importComuxDocsFromFile(projectName: string): Promise<{
+  deployImported: boolean;
+  testImported: boolean;
+}> {
+  const project = await prisma.project
+    .findUnique({ where: { name: projectName } })
+    .catch(() => null);
+  if (!project?.cwd) return { deployImported: false, testImported: false };
+
+  const dir = path.join(project.cwd, ".comux");
+  const deployFile = tryReadFile(path.join(dir, "deploy.md"));
+  const testFile = tryReadFile(path.join(dir, "test.md"));
+
+  // A file may look "non-empty" (has headings, HTML hints, empty `- [ ]`
+  // checkboxes from a scaffolding template) without holding any real
+  // user content. Strip those out and check whether anything substantive
+  // remains — otherwise we'd import boilerplate over a real DB value.
+  const stripScaffolding = (s: string) =>
+    s
+      .replace(/<!--[\s\S]*?-->/g, "")          // HTML comments
+      .replace(/^\s*#+\s.*$/gm, "")             // markdown headings
+      .replace(/^\s*-\s*\[\s*\]\s*$/gm, "")     // empty checkbox bullets
+      .replace(/^_[^_\n]*_\s*$/gm, "")          // italic placeholder lines
+      .trim();
+  const hasRealContent = (s: string) => stripScaffolding(s).length > 0;
+
+  const nextDeploy =
+    hasRealContent(deployFile) && deployFile !== project.deployDoc
+      ? deployFile
+      : project.deployDoc;
+  const nextTest =
+    hasRealContent(testFile) && testFile !== project.testDoc
+      ? testFile
+      : project.testDoc;
+
+  const deployImported = nextDeploy !== project.deployDoc;
+  const testImported = nextTest !== project.testDoc;
+
+  if (deployImported || testImported) {
+    await prisma.project
+      .update({
+        where: { name: projectName },
+        data: { deployDoc: nextDeploy, testDoc: nextTest },
+      })
+      .catch(() => {
+        /* ignore — caller can retry */
+      });
   }
 
-  writeAuto(deployPath, deployDoc || DEPLOY_PLACEHOLDER);
-  writeAuto(testPath, testDoc || TEST_PLACEHOLDER);
+  return { deployImported, testImported };
 }
 
 const DEPLOY_PLACEHOLDER =
