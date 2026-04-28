@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidCwd } from "@/lib/validate";
-import { getProjectsRoot } from "@/lib/settings";
+import { getAllowedCwdRoots } from "@/lib/settings";
 import { gitClone, inspectCwd } from "@/lib/git";
 
 export async function POST(
@@ -34,10 +34,10 @@ export async function POST(
     );
   }
 
-  const projectsRoot = await getProjectsRoot();
-  if (!isValidCwd(project.cwd, projectsRoot)) {
+  const allowedRoots = await getAllowedCwdRoots();
+  if (!isValidCwd(project.cwd, ...allowedRoots)) {
     return NextResponse.json(
-      { error: "Working directory must be within PROJECTS_ROOT" },
+      { error: "Working directory must be within PROJECTS_ROOT (or comux's own source dir for self-managed setup)" },
       { status: 400 }
     );
   }

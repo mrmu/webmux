@@ -236,6 +236,7 @@ export default function ProjectSettings({
   const [deployDoc, setDeployDoc] = useState("");
   const [testDoc, setTestDoc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [syncBusy, setSyncBusy] = useState(false);
 
   // Hosts
@@ -357,6 +358,7 @@ export default function ProjectSettings({
 
   const saveProject = async () => {
     setSaving(true);
+    setSaveError("");
     try {
       await api.put(`/api/projects/${projectName}`, {
         display_name: displayName,
@@ -370,7 +372,9 @@ export default function ProjectSettings({
       });
       await loadGitStatus();
       loadHealthChecks();
-    } catch { /* ignore */ }
+    } catch (e) {
+      setSaveError(humanizeSaveError(e instanceof Error ? e.message : String(e)));
+    }
     setSaving(false);
   };
 
@@ -509,6 +513,16 @@ export default function ProjectSettings({
     setPointerBusyFor(null);
   };
 
+  function humanizeSaveError(raw: string): string {
+    if (/Working directory must be within PROJECTS_ROOT/i.test(raw)) {
+      return "工作目錄必須位於 PROJECTS_ROOT 之下，或等於 comux 自己跑的目錄。請改路徑、調整 PROJECTS_ROOT，或讓 comux 從該目錄啟動。";
+    }
+    if (/Invalid command/i.test(raw)) {
+      return "啟動指令包含不允許的字元（shell 元字元、管線、相對路徑等）。";
+    }
+    return raw;
+  }
+
   function humanizePointerError(raw: string): string {
     // Node fs errors are verbose; tease out the common ones into something
     // a non-engineer user can act on.
@@ -618,6 +632,10 @@ export default function ProjectSettings({
             <label>工作目錄</label>
             <input type="text" value={cwd} onChange={(e) => setCwd(e.target.value)} />
           </div>
+          <p className="settings-hint" style={{ margin: "-0.25rem 0 0.5rem" }}>
+            可隨時修改。需位於 PROJECTS_ROOT 之下，或等於 comux 自己跑的目錄（讓 comux
+            專案能自我管理）。若 tmux session 在執行，新路徑要等 session 結束、下次啟動才生效。
+          </p>
           <div className="form-row">
             <label>顏色</label>
             <div className="color-picker">
@@ -665,6 +683,7 @@ export default function ProjectSettings({
           <p className="settings-hint" style={{ marginTop: "0.35rem" }}>
             儲存會同步更新到 <code>.comux/project.md</code>，供 AI agent 讀取。
           </p>
+          {saveError && <p className="pointer-error">{saveError}</p>}
         </div>
 
         <HealthCheckSection

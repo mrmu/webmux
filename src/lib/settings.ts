@@ -21,6 +21,16 @@ export async function getProjectsRoot(): Promise<string> {
   );
 }
 
+/** Roots a project's cwd is allowed to live under: PROJECTS_ROOT plus the
+ *  directory comux itself runs from (`process.cwd()`), so the comux
+ *  self-managed project can sit in e.g. `/home/devops/comux` while the
+ *  shared projects root is `/home/devops/projects`. */
+export async function getAllowedCwdRoots(): Promise<string[]> {
+  const projectsRoot = await getProjectsRoot();
+  const selfRoot = process.cwd();
+  return projectsRoot === selfRoot ? [projectsRoot] : [projectsRoot, selfRoot];
+}
+
 export async function isSetupComplete(): Promise<boolean> {
   const userCount = await prisma.user.count().catch(() => 0);
   const root = await getSetting("projectsRoot");

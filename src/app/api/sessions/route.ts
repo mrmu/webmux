@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
 import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
-import { getProjectsRoot } from "@/lib/settings";
+import { getProjectsRoot, getAllowedCwdRoots } from "@/lib/settings";
 
 export async function GET(request: NextRequest) {
   if (!requireAuth(request))
@@ -95,9 +95,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (cwd && !isValidCwd(cwd, projectsRoot)) {
+  const allowedRoots = await getAllowedCwdRoots();
+  if (cwd && !isValidCwd(cwd, ...allowedRoots)) {
     return NextResponse.json(
-      { error: "Working directory must be within PROJECTS_ROOT" },
+      { error: "Working directory must be within PROJECTS_ROOT (or comux's own source dir for self-managed setup)" },
       { status: 400 }
     );
   }

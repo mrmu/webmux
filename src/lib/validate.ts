@@ -7,11 +7,16 @@ export function isValidSessionName(name: string): boolean {
   return name.length > 0 && name.length <= 100 && SAFE_NAME_RE.test(name);
 }
 
-/** Validate cwd is within the given projects root */
-export function isValidCwd(cwd: string, projectsRoot: string): boolean {
+/** Validate cwd is within any of the given roots (variadic for the common
+ *  case of `[projectsRoot, comuxSelfRoot]`). The self-root exception lets
+ *  the comux project manage itself even when the source dir lives outside
+ *  PROJECTS_ROOT — without it, you can't bootstrap comux on a new host. */
+export function isValidCwd(cwd: string, ...roots: string[]): boolean {
   const resolved = path.resolve(cwd);
-  const root = path.resolve(projectsRoot);
-  return resolved === root || resolved.startsWith(root + path.sep);
+  return roots.some((root) => {
+    const r = path.resolve(root);
+    return resolved === r || resolved.startsWith(r + path.sep);
+  });
 }
 
 /** Validate command — no shell metacharacters, reasonable length */

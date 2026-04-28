@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidCwd, isValidCommand } from "@/lib/validate";
-import { getProjectsRoot } from "@/lib/settings";
+import { getAllowedCwdRoots } from "@/lib/settings";
 import { syncComuxDir } from "@/lib/sync-comux-dir";
 
 export async function GET(
@@ -39,10 +39,10 @@ export async function PUT(
   const body = await request.json();
 
   // Validate cwd if provided
-  const projectsRoot = await getProjectsRoot();
-  if (body.cwd !== undefined && body.cwd !== "" && !isValidCwd(body.cwd, projectsRoot)) {
+  const allowedRoots = await getAllowedCwdRoots();
+  if (body.cwd !== undefined && body.cwd !== "" && !isValidCwd(body.cwd, ...allowedRoots)) {
     return NextResponse.json(
-      { error: "Working directory must be within PROJECTS_ROOT" },
+      { error: "Working directory must be within PROJECTS_ROOT (or comux's own source dir for self-managed setup)" },
       { status: 400 }
     );
   }

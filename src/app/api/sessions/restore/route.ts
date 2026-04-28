@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import * as tmux from "@/lib/tmux";
 import { isValidSessionName, isValidCwd, isValidCommand } from "@/lib/validate";
-import { getProjectsRoot } from "@/lib/settings";
+import { getAllowedCwdRoots } from "@/lib/settings";
 
 /** Restore all DB-saved sessions that aren't currently running in tmux. */
 export async function POST(request: NextRequest) {
@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
     if (!p.cwd) continue;
 
     // Validate before executing anything from DB
-    const projectsRoot = await getProjectsRoot();
+    const allowedRoots = await getAllowedCwdRoots();
     if (!isValidSessionName(p.name)) { skipped.push(p.name); continue; }
-    if (p.cwd && !isValidCwd(p.cwd, projectsRoot)) { skipped.push(p.name); continue; }
+    if (p.cwd && !isValidCwd(p.cwd, ...allowedRoots)) { skipped.push(p.name); continue; }
     if (p.command && !isValidCommand(p.command)) { skipped.push(p.name); continue; }
 
     try {
