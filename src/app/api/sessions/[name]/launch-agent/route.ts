@@ -8,9 +8,12 @@ import * as tmux from "@/lib/tmux";
 const execFileAsync = promisify(execFile);
 
 const AGENTS = {
-  claude:  { binary: "claude",  label: "Claude Code"  },
-  codex:   { binary: "codex",   label: "OpenAI Codex" },
-  gemini:  { binary: "gemini",  label: "Gemini CLI"   },
+  // Claude defaults to --dangerously-skip-permissions because comux is
+  // already running on a single-tenant host that comux itself controls;
+  // the per-tool permission prompts add friction without security gain.
+  claude:  { binary: "claude",  label: "Claude Code",  args: ["--dangerously-skip-permissions"] },
+  codex:   { binary: "codex",   label: "OpenAI Codex", args: [] as string[] },
+  gemini:  { binary: "gemini",  label: "Gemini CLI",   args: [] as string[] },
 } as const;
 type AgentId = keyof typeof AGENTS;
 
@@ -35,7 +38,7 @@ export async function POST(
   if (!isAgentId(agentId)) {
     return NextResponse.json({ error: "Unknown agent" }, { status: 400 });
   }
-  const { binary, label } = AGENTS[agentId];
+  const { binary, label, args } = AGENTS[agentId];
 
   const project = await prisma.project.findUnique({ where: { name } });
   if (!project) {
@@ -73,8 +76,9 @@ export async function POST(
     }
   }
 
+  const launchCmd = [binary, ...args].join(" ");
   try {
-    await tmux.sendKeys(name, binary);
+    await tmux.sendKeys(name, launchCmd);
   } catch (e) {
     return NextResponse.json(
       { error: `Failed to send command to tmux: ${(e as Error).message}` },
